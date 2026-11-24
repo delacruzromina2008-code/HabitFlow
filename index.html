@@ -1,0 +1,3584 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>HabitFlow: Programa de Hábitos Calibrado (21 Días)</title>
+  
+  <meta name="description" content="HabitFlow: Especificación Funcional y Programa de Hábitos de 21 Días condicionado por magnitud y complejidad (Chico, Mediano, Grande).">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Estilos Visuales Principales y Responsividad Global -->
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              300: '#a5b4fc',
+              400: '#818cf8',
+              500: '#6366f1', // Indigo
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+            },
+            growth: {
+              50: '#ecfdf5',
+              100: '#d1fae5',
+              200: '#a7f3d0',
+              300: '#6ee7b7',
+              400: '#34d399',
+              500: '#10b981', // Emerald
+              600: '#059669',
+              700: '#047857',
+              800: '#065f46',
+              900: '#064e3b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- React 18, ReactDOM 18, Babel Standalone -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Confetti for visual celebration -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background-color: #F8FAFC;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="h-full text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900">
+  <div id="root" class="min-h-full flex flex-col"></div>
+
+  <!-- Main Application Script (Babel) -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo } = React;
+
+    // --- Web Audio Synthetic Chime Player ---
+    const playChime = () => {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const now = ctx.currentTime;
+        
+        // Tone 1: 587.33 Hz (D5)
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(587.33, now);
+        gain1.gain.setValueAtTime(0.15, now);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.8);
+
+        // Tone 2: 880 Hz (A5)
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(880, now + 0.15);
+        gain2.gain.setValueAtTime(0.18, now + 0.15);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.15);
+        osc2.stop(now + 1.2);
+      } catch (e) {
+        console.warn('Audio chime could not play:', e);
+      }
+    };
+
+    // --- SVG Icon Set ---
+    const Icons = {
+      Check: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7"/></svg>,
+      Lock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>,
+      Unlock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>,
+      Play: () => <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>,
+      Pause: () => <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>,
+      Reset: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>,
+      Clock: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
+      Calendar: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>,
+      BarChart: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>,
+      Target: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>,
+      Sparkles: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>,
+      ArrowRight: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>,
+      ArrowLeft: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>,
+      Award: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V6a2 2 0 10-2 2h2zm0 0v4l2.5 1.5L12 15l-2.5-1.5L12 12z"/></svg>,
+      Download: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>,
+      Refresh: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>,
+      Settings: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
+      Leaf: () => <svg className="w-4 h-4 text-growth-600" fill="currentColor" viewBox="0 0 24 24"><path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A9.45 9.45 0 0017 8z"/><path d="M3.27 3a18.23 18.23 0 004.83 8.58A18.15 18.15 0 0017 16V8a5 5 0 00-5-5H3.27z"/></svg>
+    };
+
+    // --- MAGNITUDE SPECIFICATIONS & DEFINITION OF THE 3 CALENDARS ---
+    const HABIT_MAGNITUDES = {
+      chico: {
+        id: 'chico',
+        name: 'Chico (Baja complejidad / Físico rápido)',
+        shortName: 'Chico',
+        tag: 'Baja Complejidad',
+        color: 'emerald',
+        badgeBg: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+        icon: '🧹',
+        examples: 'Ordenar el cuarto, tender la cama, hidratación, recoger el escritorio, 5 estiramientos.',
+        description: 'Micro-tareas físicas o de baja carga cognitiva. No requieren 10 o 25 minutos. Lo difícil es la inercia de levantarse. Los lapsos van de 2 a 5 min en la Etapa 1 y se consolidan en rutinas ágiles de 5 a 10 min.',
+        timeRangeLabel: '2 a 10 minutos por día',
+        totalPlannedMinutes: 87
+      },
+      mediano: {
+        id: 'mediano',
+        name: 'Mediano (Complejidad moderada / Rutina diaria)',
+        shortName: 'Mediano',
+        tag: 'Moderado',
+        color: 'indigo',
+        badgeBg: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+        icon: '📖',
+        examples: 'Lectura de libros, repasar apuntes del día, practicar idioma (Duolingo), diario reflexivo, ejercicio ligero.',
+        description: 'Hábitos diarios balanceados entre concentración mental y constancia de rutina. Lapsos estructurados de 5 a 10 min al inicio, alcanzando de 10 a 20 min en la etapa de autonomía.',
+        timeRangeLabel: '5 a 23 minutos por día',
+        totalPlannedMinutes: 182
+      },
+      grande: {
+        id: 'grande',
+        name: 'Grande (Alta demanda cognitiva / Estudio profundo)',
+        shortName: 'Grande',
+        tag: 'Alta Complejidad',
+        color: 'purple',
+        badgeBg: 'bg-purple-100 text-purple-800 border-purple-300',
+        icon: '🧠',
+        examples: 'Estudiar materias complejas (cálculo, física, medicina), redactar tesis/ensayos, programar software, resolver problemas analíticos.',
+        description: 'Proyectos académicos y profesionales de alta exigencia mental. Arranca con 5-8 min de fricción cero para vencer la intimidación, escalando a bloques profundos de 15 a 30 min (técnica Pomodoro guiada).',
+        timeRangeLabel: '5 a 30 minutos por día',
+        totalPlannedMinutes: 257
+      }
+    };
+
+    // Stage Names
+    const PROGRAM_STAGES = [
+      { id: 1, name: 'Etapa 1: Fundamentos y Micro-pasos', days: 'Días 1 a 7', color: 'indigo' },
+      { id: 2, name: 'Etapa 2: Consistencia y Ritmo', days: 'Días 8 a 14', color: 'blue' },
+      { id: 3, name: 'Etapa 3: Consolidación y Autonomía', days: 'Días 15 a 21', color: 'emerald' },
+    ];
+
+    // Helper to get tailored Day Configuration conditioned by Magnitude
+    const getDayConfig = (dayNum, magnitude = 'mediano') => {
+      // 1. DURATION MAPPINGS FOR THE 3 CALENDARS
+      const durations = {
+        chico:   [2, 3, 3, 3, 3, 4, 2,  5, 3,  5,  5,  5,  8, 3,  5,  4, 3, 10,  5, 3, 3],
+        mediano: [5, 5, 5, 5, 5, 7, 3,  8, 5, 10,  8, 10, 18, 5, 10,  5, 5, 23, 10, 5, 5],
+        grande:  [5, 7, 8, 6, 8, 10, 5, 12, 8, 15, 12, 15, 25, 7, 15, 10, 8, 30, 15, 8, 8]
+      };
+
+      // 2. MULTI-PHASE GUIDED SEQUENCES FOR DAYS 13 AND 18
+      const sequences = {
+        chico: {
+          13: [
+            { name: 'Acción Rápida', minutes: 4, type: 'work' },
+            { name: 'Pausa Breve', minutes: 1, type: 'break' },
+            { name: 'Cierre y Orden', minutes: 3, type: 'work' }
+          ],
+          18: [
+            { name: 'Micro-Bloque 1', minutes: 4, type: 'work' },
+            { name: 'Pausa Activa', minutes: 2, type: 'break' },
+            { name: 'Micro-Bloque 2', minutes: 4, type: 'work' }
+          ]
+        },
+        mediano: {
+          13: [
+            { name: 'Trabajo Enfocado', minutes: 10, type: 'work' },
+            { name: 'Descanso Activo', minutes: 3, type: 'break' },
+            { name: 'Trabajo de Cierre', minutes: 5, type: 'work' }
+          ],
+          18: [
+            { name: 'Bloque 1 de Trabajo', minutes: 10, type: 'work' },
+            { name: 'Pausa de Descanso', minutes: 3, type: 'break' },
+            { name: 'Bloque 2 de Trabajo', minutes: 10, type: 'work' }
+          ]
+        },
+        grande: {
+          13: [
+            { name: 'Estudio Profundo', minutes: 15, type: 'work' },
+            { name: 'Descanso Activo', minutes: 3, type: 'break' },
+            { name: 'Consolidación Analítica', minutes: 7, type: 'work' }
+          ],
+          18: [
+            { name: 'Bloque 1 Pomodoro', minutes: 12, type: 'work' },
+            { name: 'Descanso Mental', minutes: 4, type: 'break' },
+            { name: 'Bloque 2 Pomodoro', minutes: 14, type: 'work' }
+          ]
+        }
+      };
+
+      // 3. BASE DAY METADATA
+      const baseDays = [
+        { day: 1, stage: 1, title: 'Registrar Tarea y Primera Acción Mínima', purpose: 'Reducir la fricción inicial al nivel más bajo posible definiendo una micro-acción inmediata.', actionsCount: 4 },
+        { day: 2, stage: 1, title: 'Descomposición en 3 Pasos Ordenados', purpose: 'Dividir la tarea en una secuencia lineal manejable y clara.', actionsCount: 4 },
+        { day: 3, stage: 1, title: 'Ejecución Enfocada en Paso 1', purpose: 'Iniciar directamente la primera acción con el temporizador sin dudar.', actionsCount: 3 },
+        { day: 4, stage: 1, title: 'Acondicionamiento del Espacio de Estudio', purpose: 'Eliminar obstáculos físicos y preparar herramientas antes de comenzar.', actionsCount: 4 },
+        { day: 5, stage: 1, title: 'Identificación de Distracciones y Regla Antidistracción', purpose: 'Anticipar tentaciones comunes y diseñar una barrera preventiva.', actionsCount: 3 },
+        { day: 6, stage: 1, title: 'Priorización Rápida y Foco Único', purpose: 'Elegir una sola prioridad entre 3 pendientes y dedicarle trabajo concentrado.', actionsCount: 4 },
+        { day: 7, stage: 1, title: 'Evaluación y Resumen de la Semana 1', purpose: 'Medir el impacto de los micro-pasos y consolidar el aprendizaje inicial.', actionsCount: 3 },
+        { day: 8, stage: 2, title: 'Hora Programada y Puntualidad de Inicio', purpose: 'Establecer un compromiso horario y verificar el margen de inicio de 15 minutos.', actionsCount: 3 },
+        { day: 9, stage: 2, title: 'Definir "Mi Próximo Paso" y Materiales', purpose: 'Dejar lista la acción futura para desplegarla como tarjeta destacada en el inicio.', actionsCount: 3 },
+        { day: 10, stage: 2, title: 'Bloque de Enfoque Sostenido', purpose: 'Ampliar la capacidad de concentración continua y registrar avance real.', actionsCount: 3 },
+        { day: 11, stage: 2, title: 'Tracción Continua en Paso Pendiente', purpose: 'Dar continuidad al trabajo en curso y actualizar su estado con honestidad.', actionsCount: 3 },
+        { day: 12, stage: 2, title: 'Principio de Premack (Enfoque previo al Ocio)', purpose: 'Vincular una gratificación placentera como recompensa de una sesión previa.', actionsCount: 4 },
+        { day: 13, stage: 2, title: 'Temporizador Guiado Secuencial (3 Fases)', purpose: 'Entrenar el ritmo de trabajo y descanso intercalado mediante bloques guiados.', actionsCount: 2 },
+        { day: 14, stage: 2, title: 'Evaluación Semana 2 y Comparativa', purpose: 'Identificar las dos mejores estrategias y contrastar la facilidad de inicio.', actionsCount: 3 },
+        { day: 15, stage: 3, title: 'Priorización Matricial 1 a 3 y Foco en la #1', purpose: 'Ordenar 3 tareas por impacto real y trabajar concentrado en la principal.', actionsCount: 4 },
+        { day: 16, stage: 3, title: 'Confrontar la Tarea Evitada', purpose: 'Vencer la mayor resistencia psicológica dedicando un lapso exacto a lo postergado.', actionsCount: 4 },
+        { day: 17, stage: 3, title: 'Preparación Anticipada "Para Mañana"', purpose: 'Dejar el camino libre de fricciones la noche anterior para arrancar al instante.', actionsCount: 4 },
+        { day: 18, stage: 3, title: 'Sesión Doble Guiada de Enfoque Profundo', purpose: 'Consolidar la resistencia mental en dos bloques continuos con pausa activa.', actionsCount: 2 },
+        { day: 19, stage: 3, title: 'Checklist Integral de 5 Puntos', purpose: 'Verificar sistemáticamente los 5 elementos del estudio autónomo.', actionsCount: 2 },
+        { day: 20, stage: 3, title: 'Diseño del Plan Personal de Estudio Sostenible', purpose: 'Seleccionar las 2 estrategias maestras y definir la frecuencia semanal.', actionsCount: 3 },
+        { day: 21, stage: 3, title: 'Evaluación Final, Graduación y Planta Madura', purpose: 'Cierre del programa de 21 días, balance de métricas objetivas y nuevo ciclo.', actionsCount: 3 }
+      ];
+
+      const base = baseDays[dayNum - 1] || baseDays[0];
+      const validMag = HABIT_MAGNITUDES[magnitude] ? magnitude : 'mediano';
+      const duration = durations[validMag][dayNum - 1];
+      const sequence = sequences[validMag][dayNum] || null;
+
+      return {
+        ...base,
+        duration,
+        sequence,
+        magnitude: validMag
+      };
+    };
+
+    // Botanical Plant Stages based on total completed days (0 to 21)
+    const getPlantPhase = (completedDaysCount) => {
+      if (completedDaysCount === 0) {
+        return {
+          phase: 1,
+          name: 'Semilla Latente',
+          range: 'Días 1-3',
+          description: 'Tu intención está sembrada en tierra fértil. La constancia diaria despertará tu disciplina.',
+          quote: '“El comienzo es la parte más importante de cualquier labor.”'
+        };
+      }
+      if (completedDaysCount <= 3) {
+        return {
+          phase: 1,
+          name: 'Semilla Germinando',
+          range: 'Días 1-3',
+          description: 'La semilla absorbe tus primeras acciones mínimas y prepara sus raíces.',
+          quote: '“Haz que el primer paso sea tan pequeño que no puedas decir que no.”'
+        };
+      }
+      if (completedDaysCount <= 7) {
+        return {
+          phase: 2,
+          name: 'Brote Emergente',
+          range: 'Días 4-7',
+          description: '¡Ha roto la superficie! Dos hojas cotiledóneas emergen buscando la luz.',
+          quote: '“La fricción inicial ha sido derrotada. Ya estás en movimiento.”'
+        };
+      }
+      if (completedDaysCount <= 14) {
+        return {
+          phase: 3,
+          name: 'Tallo Firme con Hojas',
+          range: 'Días 8-14',
+          description: 'El tallo se engrosa, ramifica hojas firmes y soporta periodos de trabajo continuos.',
+          quote: '“La disciplina no es fuerza bruta, es la repetición tranquila de lo acordado.”'
+        };
+      }
+      if (completedDaysCount <= 20) {
+        return {
+          phase: 4,
+          name: 'Floración Radiante',
+          range: 'Días 15-20',
+          description: 'Follaje frondoso con capullos abriéndose en flores vivaces y mariposas sutiles.',
+          quote: '“Tu concentración florece con naturalidad. Tienes control de tu tiempo.”'
+        };
+      }
+      return {
+        phase: 5,
+        name: 'Árbol Maduro de Estudio',
+        range: 'Día 21',
+        description: 'Árbol majestuoso y frondoso cargado de frutos dorados de logro personal.',
+        quote: '“¡Felicidades! Has completado los 21 días. El hábito ahora es parte de ti.”'
+      };
+    };
+
+    // --- VIRTUAL PLANT SVG COMPONENT ---
+    const VirtualPlantVisual = ({ phase, size = 'default' }) => {
+      const isLarge = size === 'large';
+      const heightClass = isLarge ? 'h-64 sm:h-72' : 'h-48 sm:h-56';
+
+      return (
+        <div className={`w-full ${heightClass} flex items-center justify-center relative overflow-hidden bg-gradient-to-b from-indigo-50/40 via-emerald-50/30 to-amber-50/40 rounded-2xl border border-slate-100 p-3`}>
+          <div className="absolute inset-0 bg-radial from-emerald-100/30 via-transparent to-transparent pointer-events-none"></div>
+
+          <svg className="w-full h-full max-w-xs drop-shadow-sm transition-all duration-700 ease-out" viewBox="0 0 240 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="120" cy="180" rx="70" ry="12" fill="#cbd5e1" opacity="0.4" />
+            
+            <path d="M75 135 L85 180 C86 183 90 185 94 185 L146 185 C150 185 154 183 155 180 L165 135 Z" fill="#d97706" />
+            <path d="M85 180 L155 180 L146 185 L94 185 Z" fill="#b45309" />
+            <rect x="70" y="125" width="100" height="12" rx="4" fill="#f59e0b" />
+            <ellipse cx="120" cy="130" rx="45" ry="6" fill="#78350f" />
+            <ellipse cx="120" cy="131" rx="42" ry="4" fill="#451a03" />
+
+            {/* PHASE 1: Semilla */}
+            {phase === 1 && (
+              <g className="transition-all duration-700">
+                <circle cx="120" cy="128" r="6" fill="#fef08a" />
+                <path d="M120 123 C124 123 126 127 120 133 C114 127 116 123 120 123 Z" fill="#eab308" />
+                <circle cx="120" cy="128" r="10" stroke="#fef08a" strokeWidth="1.5" strokeDasharray="3 3" opacity="0.7" className="animate-spin" style={{ animationDuration: '8s' }} />
+                <circle cx="100" cy="118" r="2" fill="#34d399" opacity="0.6" />
+                <circle cx="140" cy="115" r="2.5" fill="#34d399" opacity="0.8" />
+                <circle cx="120" cy="108" r="1.5" fill="#fef08a" />
+              </g>
+            )}
+
+            {/* PHASE 2: Brote */}
+            {phase === 2 && (
+              <g className="transition-all duration-700">
+                <path d="M120 129 Q120 108 120 95" stroke="#10b981" strokeWidth="4" strokeLinecap="round" />
+                <path d="M120 102 C105 102 98 88 120 95 Z" fill="#34d399" stroke="#059669" strokeWidth="1" />
+                <path d="M120 98 C135 98 142 84 120 91 Z" fill="#10b981" stroke="#047857" strokeWidth="1" />
+                <circle cx="107" cy="94" r="1.8" fill="#60a5fa" />
+                <circle cx="128" cy="90" r="1.5" fill="#93c5fd" />
+              </g>
+            )}
+
+            {/* PHASE 3: Tallo con Hojas */}
+            {phase === 3 && (
+              <g className="transition-all duration-700">
+                <path d="M120 130 Q122 95 119 65" stroke="#059669" strokeWidth="5" strokeLinecap="round" />
+                <path d="M120 115 Q100 115 90 102 C102 96 115 108 120 115 Z" fill="#10b981" />
+                <path d="M120 108 Q140 108 152 95 C140 90 126 102 120 108 Z" fill="#34d399" />
+                <path d="M120 90 Q98 88 88 75 C102 70 115 82 120 90 Z" fill="#059669" />
+                <path d="M120 82 Q142 80 150 66 C138 62 125 74 120 82 Z" fill="#10b981" />
+                <path d="M119 65 C110 50 120 40 120 40 C120 40 130 50 119 65 Z" fill="#6ee7b7" stroke="#059669" strokeWidth="1" />
+                <circle cx="92" cy="78" r="2" fill="#60a5fa" />
+                <circle cx="145" cy="70" r="2" fill="#93c5fd" />
+              </g>
+            )}
+
+            {/* PHASE 4: Floración */}
+            {phase === 4 && (
+              <g className="transition-all duration-700">
+                <path d="M120 130 Q118 85 120 50" stroke="#047857" strokeWidth="6" strokeLinecap="round" />
+                <path d="M120 95 Q90 85 80 65" stroke="#047857" strokeWidth="4" strokeLinecap="round" />
+                <path d="M120 80 Q150 75 160 55" stroke="#047857" strokeWidth="4" strokeLinecap="round" />
+                <circle cx="95" cy="75" r="14" fill="#059669" opacity="0.9" />
+                <circle cx="145" cy="70" r="15" fill="#10b981" opacity="0.9" />
+                <circle cx="120" cy="55" r="18" fill="#34d399" opacity="0.9" />
+                <circle cx="105" cy="45" r="12" fill="#6ee7b7" />
+                <circle cx="135" cy="45" r="12" fill="#6ee7b7" />
+
+                <g transform="translate(76, 60)">
+                  <circle cx="0" cy="-6" r="4" fill="#818cf8" />
+                  <circle cx="6" cy="0" r="4" fill="#818cf8" />
+                  <circle cx="0" cy="6" r="4" fill="#818cf8" />
+                  <circle cx="-6" cy="0" r="4" fill="#818cf8" />
+                  <circle cx="0" cy="0" r="3" fill="#facc15" />
+                </g>
+                <g transform="translate(162, 52)">
+                  <circle cx="0" cy="-6" r="4" fill="#a78bfa" />
+                  <circle cx="6" cy="0" r="4" fill="#a78bfa" />
+                  <circle cx="0" cy="6" r="4" fill="#a78bfa" />
+                  <circle cx="-6" cy="0" r="4" fill="#a78bfa" />
+                  <circle cx="0" cy="0" r="3" fill="#facc15" />
+                </g>
+                <g transform="translate(120, 36)">
+                  <circle cx="0" cy="-7" r="5" fill="#6366f1" />
+                  <circle cx="7" cy="0" r="5" fill="#6366f1" />
+                  <circle cx="0" cy="7" r="5" fill="#6366f1" />
+                  <circle cx="-7" cy="0" r="5" fill="#6366f1" />
+                  <circle cx="0" cy="0" r="4" fill="#fef08a" />
+                </g>
+                <g transform="translate(165, 30)">
+                  <ellipse cx="-4" cy="-4" rx="4" ry="6" fill="#f472b6" transform="rotate(-30)" />
+                  <ellipse cx="4" cy="-4" rx="4" ry="6" fill="#f472b6" transform="rotate(30)" />
+                  <line x1="0" y1="-8" x2="0" y2="4" stroke="#475569" strokeWidth="1" />
+                </g>
+              </g>
+            )}
+
+            {/* PHASE 5: Árbol Completo */}
+            {phase === 5 && (
+              <g className="transition-all duration-700">
+                <path d="M120 130 L114 85 Q105 75 90 60 M120 85 Q135 75 150 60 M120 85 L120 55" stroke="#78350f" strokeWidth="8" strokeLinecap="round" />
+                <ellipse cx="120" cy="50" rx="55" ry="36" fill="#047857" />
+                <ellipse cx="90" cy="55" rx="35" ry="28" fill="#059669" />
+                <ellipse cx="150" cy="55" rx="35" ry="28" fill="#059669" />
+                <ellipse cx="120" cy="40" rx="42" ry="28" fill="#10b981" />
+                <ellipse cx="105" cy="32" rx="25" ry="18" fill="#34d399" />
+                <ellipse cx="135" cy="32" rx="25" ry="18" fill="#6ee7b7" />
+
+                <circle cx="85" cy="52" r="5" fill="#f59e0b" stroke="#fef08a" strokeWidth="1" />
+                <circle cx="105" cy="62" r="5" fill="#f59e0b" stroke="#fef08a" strokeWidth="1" />
+                <circle cx="122" cy="35" r="5.5" fill="#eab308" stroke="#fef08a" strokeWidth="1" />
+                <circle cx="140" cy="50" r="5" fill="#f59e0b" stroke="#fef08a" strokeWidth="1" />
+                <circle cx="155" cy="65" r="4.5" fill="#f59e0b" stroke="#fef08a" strokeWidth="1" />
+
+                <g transform="translate(120, 10)">
+                  <polygon points="0,-8 2.5,-2.5 8,0 2.5,2.5 0,8 -2.5,2.5 -8,0 -2.5,-2.5" fill="#fbbf24" stroke="#f59e0b" strokeWidth="1" />
+                </g>
+                <g transform="translate(65, 35)">
+                  <ellipse cx="-3" cy="-3" rx="3" ry="5" fill="#ec4899" transform="rotate(-25)" />
+                  <ellipse cx="3" cy="-3" rx="3" ry="5" fill="#ec4899" transform="rotate(25)" />
+                </g>
+                <g transform="translate(175, 40)">
+                  <ellipse cx="-3" cy="-3" rx="3" ry="5" fill="#818cf8" transform="rotate(-25)" />
+                  <ellipse cx="3" cy="-3" rx="3" ry="5" fill="#818cf8" transform="rotate(25)" />
+                </g>
+              </g>
+            )}
+          </svg>
+        </div>
+      );
+    };
+
+    // --- NATIVE REACT TIMER COMPONENT ---
+    const NativeTimer = ({ 
+      minutes = 5, 
+      label = 'Temporizador de Enfoque', 
+      onComplete, 
+      isCompleted = false, 
+      readOnly = false,
+      sequence = null 
+    }) => {
+      const phases = useMemo(() => {
+        if (sequence && Array.isArray(sequence) && sequence.length > 0) {
+          return sequence.map(p => ({
+            name: p.name,
+            duration: p.minutes * 60,
+            type: p.type || (p.name.toLowerCase().includes('descanso') || p.name.toLowerCase().includes('pausa') ? 'break' : 'work')
+          }));
+        }
+        return [{
+          name: 'Enfoque',
+          duration: minutes * 60,
+          type: 'work'
+        }];
+      }, [sequence, minutes]);
+
+      const [phaseIndex, setPhaseIndex] = useState(0);
+      const [timeLeft, setTimeLeft] = useState(phases[0].duration);
+      const [isRunning, setIsRunning] = useState(false);
+      const [timerDone, setTimerDone] = useState(isCompleted);
+      const [soundEnabled, setSoundEnabled] = useState(true);
+      const timerRef = useRef(null);
+
+      useEffect(() => {
+        return () => {
+          if (timerRef.current) clearInterval(timerRef.current);
+        };
+      }, []);
+
+      // If minutes or sequence change dynamically (e.g. user toggles magnitude)
+      useEffect(() => {
+        if (!isCompleted && !isRunning) {
+          setPhaseIndex(0);
+          setTimeLeft(phases[0].duration);
+        }
+      }, [phases, minutes, isCompleted]);
+
+      useEffect(() => {
+        if (isCompleted) {
+          setTimerDone(true);
+          setIsRunning(false);
+        }
+      }, [isCompleted]);
+
+      useEffect(() => {
+        if (isRunning) {
+          timerRef.current = setInterval(() => {
+            setTimeLeft(prev => {
+              if (prev <= 1) {
+                if (soundEnabled) playChime();
+
+                if (phaseIndex + 1 < phases.length) {
+                  const nextIdx = phaseIndex + 1;
+                  setPhaseIndex(nextIdx);
+                  return phases[nextIdx].duration;
+                } else {
+                  clearInterval(timerRef.current);
+                  setIsRunning(false);
+                  setTimerDone(true);
+                  if (onComplete) {
+                    const totalMins = phases.reduce((acc, p) => acc + (p.duration / 60), 0);
+                    onComplete(totalMins);
+                  }
+                  return 0;
+                }
+              }
+              return prev - 1;
+            });
+          }, 1000);
+        } else {
+          if (timerRef.current) clearInterval(timerRef.current);
+        }
+
+        return () => {
+          if (timerRef.current) clearInterval(timerRef.current);
+        };
+      }, [isRunning, phaseIndex, phases, soundEnabled, onComplete]);
+
+      const formatTime = (secs) => {
+        const m = Math.floor(secs / 60);
+        const s = secs % 60;
+        return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      };
+
+      const handleStart = () => {
+        if (readOnly || timerDone) return;
+        setIsRunning(true);
+      };
+
+      const handlePause = () => {
+        setIsRunning(false);
+      };
+
+      const handleReset = () => {
+        if (readOnly) return;
+        setIsRunning(false);
+        setPhaseIndex(0);
+        setTimeLeft(phases[0].duration);
+        setTimerDone(false);
+      };
+
+      const handleFastForward = () => {
+        if (readOnly || timerDone) return;
+        setTimeLeft(2);
+      };
+
+      const currentPhase = phases[phaseIndex] || phases[0];
+      const progressPercent = Math.min(
+        100, 
+        Math.max(0, ((currentPhase.duration - timeLeft) / currentPhase.duration) * 100)
+      );
+
+      return (
+        <div className={`p-4 sm:p-5 rounded-2xl border transition-all ${
+          timerDone 
+            ? 'bg-growth-50/70 border-growth-200' 
+            : currentPhase.type === 'break'
+              ? 'bg-amber-50/70 border-amber-200'
+              : 'bg-white border-slate-200 shadow-sm'
+        }`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className={`p-2 rounded-xl ${
+                timerDone ? 'bg-growth-100 text-growth-700' : 'bg-brand-50 text-brand-600'
+              }`}>
+                <Icons.Clock />
+              </span>
+              <div>
+                <h4 className="font-semibold text-slate-800 text-sm sm:text-base leading-tight">{label}</h4>
+                {phases.length > 1 && (
+                  <p className="text-xs text-slate-500 font-medium">
+                    Fase {phaseIndex + 1} de {phases.length}: <span className="font-semibold text-brand-700">{currentPhase.name}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                title={soundEnabled ? 'Sonido activado' : 'Silenciado'}
+                className="text-xs text-slate-400 hover:text-slate-600 p-1.5 rounded-lg border border-slate-200"
+              >
+                {soundEnabled ? '🔔' : '🔕'}
+              </button>
+              {timerDone && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full bg-growth-100 text-growth-800 border border-growth-200">
+                  <Icons.Check /> Completado
+                </span>
+              )}
+            </div>
+          </div>
+
+          {phases.length > 1 && (
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {phases.map((p, idx) => (
+                <div 
+                  key={idx}
+                  className={`text-center py-1.5 px-2 rounded-lg text-xs font-medium border transition-all ${
+                    idx < phaseIndex 
+                      ? 'bg-growth-100 text-growth-800 border-growth-300'
+                      : idx === phaseIndex
+                        ? 'bg-brand-50 text-brand-800 border-brand-300 font-bold shadow-xs'
+                        : 'bg-slate-50 text-slate-400 border-slate-200'
+                  }`}
+                >
+                  {p.name} ({Math.round(p.duration / 60)}m)
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-col items-center justify-center my-3">
+            <div className="font-mono text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-slate-900 mb-2 timer-display">
+              {formatTime(timeLeft)}
+            </div>
+
+            <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200/80">
+              <div 
+                className={`h-full transition-all duration-300 rounded-full ${
+                  timerDone 
+                    ? 'bg-growth-500' 
+                    : currentPhase.type === 'break' 
+                      ? 'bg-amber-500' 
+                      : 'bg-brand-500'
+                }`}
+                style={{ width: `${timerDone ? 100 : progressPercent}%` }}
+              ></div>
+            </div>
+          </div>
+
+          {!readOnly && (
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-4 pt-3 border-t border-slate-100">
+              {!isRunning ? (
+                <button
+                  type="button"
+                  onClick={handleStart}
+                  disabled={timerDone}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm transition-all ${
+                    timerDone 
+                      ? 'bg-slate-300 cursor-not-allowed'
+                      : 'bg-brand-600 hover:bg-brand-700 active:scale-95'
+                  }`}
+                >
+                  <Icons.Play /> Iniciar Temporizador
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handlePause}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-600 text-white shadow-sm active:scale-95 transition-all"
+                >
+                  <Icons.Pause /> Pausar
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleReset}
+                title="Reiniciar a inicio"
+                className="p-2.5 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 active:scale-95 transition-all"
+              >
+                <Icons.Reset />
+              </button>
+
+              {!timerDone && (
+                <button
+                  type="button"
+                  onClick={handleFastForward}
+                  title="Modo prueba: simular últimos 2 segundos"
+                  className="text-xs text-slate-400 hover:text-brand-600 px-2 py-1 rounded border border-dashed border-slate-200 hover:border-brand-300"
+                >
+                  ⚡ Probar final
+                </button>
+              )}
+            </div>
+          )}
+
+          {readOnly && (
+            <p className="text-center text-xs text-slate-400 italic mt-2">
+              Sesión cronometrada registrada y finalizada con éxito.
+            </p>
+          )}
+        </div>
+      );
+    };
+
+    // --- MAIN APP ROOT COMPONENT ---
+    const HabitFlowApp = () => {
+      const STORAGE_KEY = 'habitflow_21days_v2';
+
+      const getInitialState = () => {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('habitflow_21days_v1');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            return {
+              activeHabit: parsed.activeHabit || 'Vencer la procrastinación e iniciar sesiones de estudio efectivas',
+              habitMagnitude: parsed.habitMagnitude || 'mediano', // 'chico' | 'mediano' | 'grande'
+              completedDays: parsed.completedDays || [],
+              currentViewingDay: parsed.currentViewingDay || 1,
+              currentView: parsed.currentView || 'dashboard',
+              dayData: parsed.dayData || {},
+              metrics: parsed.metrics || {
+                focusMinutes: 0,
+                sessionsStarted: 0,
+                sessionsCompleted: 0,
+                tasksRegisteredCount: 0,
+                stepsCompletedCount: 0,
+                punctualityLogs: []
+              },
+              featuredNextStep: parsed.featuredNextStep || null,
+              personalPlan: parsed.personalPlan || null
+            };
+          }
+        } catch (e) {
+          console.error('Error loading localStorage state:', e);
+        }
+
+        return {
+          activeHabit: 'Vencer la procrastinación e iniciar sesiones de estudio efectivas',
+          habitMagnitude: 'mediano',
+          completedDays: [],
+          currentViewingDay: 1,
+          currentView: 'dashboard',
+          dayData: {},
+          metrics: {
+            focusMinutes: 0,
+            sessionsStarted: 0,
+            sessionsCompleted: 0,
+            tasksRegisteredCount: 0,
+            stepsCompletedCount: 0,
+            punctualityLogs: []
+          },
+          featuredNextStep: null,
+          personalPlan: null
+        };
+      };
+
+      const [appState, setAppState] = useState(getInitialState);
+      const [toastMessage, setToastMessage] = useState(null);
+      const [celebrationModal, setCelebrationModal] = useState(null);
+      const [habitConfigModalOpen, setHabitConfigModalOpen] = useState(false);
+
+      // Temporary edit state for config modal
+      const [editHabitName, setEditHabitName] = useState(appState.activeHabit);
+      const [editMagnitude, setEditMagnitude] = useState(appState.habitMagnitude);
+
+      // Persist state to localStorage
+      useEffect(() => {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+        } catch (e) {
+          console.error('Failed to save to localStorage:', e);
+        }
+      }, [appState]);
+
+      const showToast = (msg, type = 'info') => {
+        setToastMessage({ msg, type });
+        setTimeout(() => setToastMessage(null), 3500);
+      };
+
+      const fireConfetti = () => {
+        if (typeof confetti === 'function') {
+          confetti({
+            particleCount: 80,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+        }
+      };
+
+      const completedDaysCount = appState.completedDays.length;
+      const globalPercentage = Math.round((completedDaysCount / 21) * 100);
+      const plantPhase = getPlantPhase(completedDaysCount);
+      const currentMagnitudeConfig = HABIT_MAGNITUDES[appState.habitMagnitude] || HABIT_MAGNITUDES.mediano;
+
+      const isDayLocked = (dayNum) => {
+        if (dayNum === 1) return false;
+        return !appState.completedDays.includes(dayNum - 1);
+      };
+
+      const isDayCompleted = (dayNum) => {
+        return appState.completedDays.includes(dayNum);
+      };
+
+      const navigateTo = (view, dayNumber = null) => {
+        if (dayNumber !== null) {
+          if (isDayLocked(dayNumber)) {
+            showToast(`El Día ${dayNumber} está bloqueado. Completa el Día ${dayNumber - 1} al 100% primero.`, 'warning');
+            return;
+          }
+          setAppState(prev => ({
+            ...prev,
+            currentViewingDay: dayNumber,
+            currentView: 'activity'
+          }));
+        } else {
+          setAppState(prev => ({
+            ...prev,
+            currentView: view
+          }));
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const handleUpdateDayField = (dayNum, fieldKey, value) => {
+        setAppState(prev => {
+          const currentDayObj = prev.dayData[dayNum] || {};
+          return {
+            ...prev,
+            dayData: {
+              ...prev.dayData,
+              [dayNum]: {
+                ...currentDayObj,
+                [fieldKey]: value
+              }
+            }
+          };
+        });
+      };
+
+      // Change habit magnitude & name
+      const handleSaveHabitConfig = (newName, newMag) => {
+        setAppState(prev => ({
+          ...prev,
+          activeHabit: newName.trim() || prev.activeHabit,
+          habitMagnitude: newMag
+        }));
+        setHabitConfigModalOpen(false);
+        showToast(`Calendario condicionado a magnitud: ${HABIT_MAGNITUDES[newMag].shortName}`, 'success');
+      };
+
+      // Calculate Day Completion Percentage
+      const calculateDayCompletion = (dayNum) => {
+        const config = getDayConfig(dayNum, appState.habitMagnitude);
+        const data = appState.dayData[dayNum] || {};
+        let doneActions = 0;
+
+        switch (dayNum) {
+          case 1:
+            if (data.taskName && data.taskName.trim().length > 1) doneActions++;
+            if (data.category) doneActions++;
+            if (data.firstAction && data.firstAction.trim().length > 1) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            break;
+          case 2:
+            if (data.step1 && data.step1.trim().length > 1) doneActions++;
+            if (data.step2 && data.step2.trim().length > 1) doneActions++;
+            if (data.step3 && data.step3.trim().length > 1) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            break;
+          case 3:
+            if (data.timerCompleted) doneActions++;
+            if (data.step1Executed === 'yes' || data.step1Executed === 'no') doneActions++;
+            if (data.reflection && data.reflection.trim().length > 2) doneActions++;
+            break;
+          case 4:
+            if (data.cleanSpace) doneActions++;
+            if (data.readyMaterials) doneActions++;
+            if (data.devicePrepared) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            break;
+          case 5:
+            if (data.mainDistraction && data.mainDistraction.trim().length > 1) doneActions++;
+            if (data.mitigationRule && data.mitigationRule.trim().length > 1) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            break;
+          case 6:
+            if (data.pending1 && data.pending2 && data.pending3) doneActions++;
+            if (data.chosenPriority) doneActions++;
+            if (data.firstStepPriority && data.firstStepPriority.trim().length > 1) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            break;
+          case 7:
+            if (data.week1Rating) doneActions++;
+            if (data.biggestBreakthrough && data.biggestBreakthrough.trim().length > 2) doneActions++;
+            if (data.summaryGenerated) doneActions++;
+            break;
+          case 8:
+            if (data.scheduledTime) doneActions++;
+            if (data.punctualityRecorded) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            break;
+          case 9:
+            if (data.nextStep && data.nextStep.trim().length > 1) doneActions++;
+            if (data.requiredMaterials && data.requiredMaterials.trim().length > 1) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            break;
+          case 10:
+            if (data.focusGoal && data.focusGoal.trim().length > 1) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            if (data.progressReport && data.progressReport.trim().length > 2) doneActions++;
+            break;
+          case 11:
+            if (data.selectedPendingStep && data.selectedPendingStep.trim().length > 1) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            if (data.stepStatus) doneActions++;
+            break;
+          case 12:
+            if (data.leisureActivity && data.leisureActivity.trim().length > 1) doneActions++;
+            if (data.linkedTask && data.linkedTask.trim().length > 1) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            if (data.premackConfirmed) doneActions++;
+            break;
+          case 13:
+            if (data.timerCompleted) doneActions++;
+            if (data.sessionFeelings) doneActions++;
+            break;
+          case 14:
+            if (Array.isArray(data.topStrategies) && data.topStrategies.length === 2) doneActions++;
+            if (data.weekComparison) doneActions++;
+            if (data.week2Reflection && data.week2Reflection.trim().length > 2) doneActions++;
+            break;
+          case 15:
+            if (data.task1 && data.task2 && data.task3) doneActions++;
+            if (data.actionForTask1 && data.actionForTask1.trim().length > 1) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            if (data.task1PrioritySet) doneActions++;
+            break;
+          case 16:
+            if (data.avoidedTask && data.avoidedTask.trim().length > 1) doneActions++;
+            if (data.microAction5m && data.microAction5m.trim().length > 1) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            if (data.frictionBroken) doneActions++;
+            break;
+          case 17:
+            if (data.tomorrowTask && data.tomorrowTask.trim().length > 1) doneActions++;
+            if (data.tomorrowFirstStep && data.tomorrowFirstStep.trim().length > 1) doneActions++;
+            if (data.tomorrowHour) doneActions++;
+            if (data.checklistTomorrowReady) doneActions++;
+            break;
+          case 18:
+            if (data.timerCompleted) doneActions++;
+            if (data.dualBlockConfirmed) doneActions++;
+            break;
+          case 19:
+            if (data.check1 && data.check2 && data.check3 && data.check4 && data.check5) doneActions++;
+            if (data.timerCompleted) doneActions++;
+            break;
+          case 20:
+            if (Array.isArray(data.finalStrategies) && data.finalStrategies.length === 2) doneActions++;
+            if (data.weeklyFrequency) doneActions++;
+            if (data.personalPlanGenerated) doneActions++;
+            break;
+          case 21:
+            if (data.transformationRating) doneActions++;
+            if (data.procrastinationBeforeAfter && data.procrastinationBeforeAfter.trim().length > 2) doneActions++;
+            if (data.finalTakeaway && data.finalTakeaway.trim().length > 2) doneActions++;
+            break;
+          default:
+            break;
+        }
+
+        const percentage = Math.round((doneActions / config.actionsCount) * 100);
+        return Math.min(100, percentage);
+      };
+
+      const handleTimerFinished = (dayNum, minutesCount) => {
+        handleUpdateDayField(dayNum, 'timerCompleted', true);
+        playChime();
+
+        setAppState(prev => ({
+          ...prev,
+          metrics: {
+            ...prev.metrics,
+            focusMinutes: (prev.metrics.focusMinutes || 0) + minutesCount,
+            sessionsCompleted: (prev.metrics.sessionsCompleted || 0) + 1,
+            sessionsStarted: Math.max((prev.metrics.sessionsStarted || 0), (prev.metrics.sessionsCompleted || 0) + 1)
+          }
+        }));
+
+        showToast(`¡Temporizador de ${minutesCount} minutos completado con éxito!`, 'success');
+      };
+
+      const handleFinalizeDay = (dayNum) => {
+        const pct = calculateDayCompletion(dayNum);
+        if (pct < 100) {
+          showToast('Debes completar todas las acciones del día antes de finalizarlo.', 'warning');
+          return;
+        }
+
+        const isAlreadyCompleted = appState.completedDays.includes(dayNum);
+        const dayData = appState.dayData[dayNum] || {};
+
+        let updatedFeaturedStep = appState.featuredNextStep;
+        if (dayNum === 9 && dayData.nextStep) {
+          updatedFeaturedStep = {
+            step: dayData.nextStep,
+            materials: dayData.requiredMaterials || 'Materiales organizados',
+            savedAt: new Date().toLocaleDateString('es-ES')
+          };
+        }
+
+        let updatedPlan = appState.personalPlan;
+        if (dayNum === 20) {
+          updatedPlan = {
+            strategies: dayData.finalStrategies || ['Micro-pasos de fricción cero', 'Acondicionamiento de espacio'],
+            frequency: dayData.weeklyFrequency || '4 días a la semana',
+            schedule: dayData.preferredSchedule || 'Horario fijo vespertino',
+            generatedAt: new Date().toLocaleDateString('es-ES')
+          };
+        }
+
+        let addedTasks = 0;
+        let addedSteps = 0;
+        if (dayNum === 1 && dayData.taskName) addedTasks = 1;
+        if (dayNum === 2) addedSteps = 3;
+        if (dayNum === 6) addedTasks = 3;
+        if (dayNum === 15) addedTasks = 3;
+
+        setAppState(prev => {
+          const newCompleted = isAlreadyCompleted 
+            ? prev.completedDays 
+            : [...prev.completedDays, dayNum].sort((a, b) => a - b);
+
+          return {
+            ...prev,
+            completedDays: newCompleted,
+            featuredNextStep: updatedFeaturedStep,
+            personalPlan: updatedPlan,
+            metrics: {
+              ...prev.metrics,
+              tasksRegisteredCount: (prev.metrics.tasksRegisteredCount || 0) + addedTasks,
+              stepsCompletedCount: (prev.metrics.stepsCompletedCount || 0) + addedSteps
+            }
+          };
+        });
+
+        fireConfetti();
+        setCelebrationModal({
+          dayNum,
+          isFinal: dayNum === 21
+        });
+      };
+
+      const handleResetAllProgress = () => {
+        if (window.confirm('¿Estás seguro de que deseas reiniciar todo el programa de 21 días? Se restablecerán todos los días, métricas y registros guardados.')) {
+          const fresh = {
+            activeHabit: appState.activeHabit,
+            habitMagnitude: appState.habitMagnitude,
+            completedDays: [],
+            currentViewingDay: 1,
+            currentView: 'dashboard',
+            dayData: {},
+            metrics: {
+              focusMinutes: 0,
+              sessionsStarted: 0,
+              sessionsCompleted: 0,
+              tasksRegisteredCount: 0,
+              stepsCompletedCount: 0,
+              punctualityLogs: []
+            },
+            featuredNextStep: null,
+            personalPlan: null
+          };
+          setAppState(fresh);
+          localStorage.removeItem(STORAGE_KEY);
+          showToast('Programa reiniciado exitosamente. ¡Comencemos el Día 1!', 'info');
+        }
+      };
+
+      // Open Modal to configure habit
+      const openConfigModal = () => {
+        setEditHabitName(appState.activeHabit);
+        setEditMagnitude(appState.habitMagnitude);
+        setHabitConfigModalOpen(true);
+      };
+
+      return (
+        <div className="flex-1 flex flex-col">
+          {/* TOAST ALERT */}
+          {toastMessage && (
+            <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-lg border text-sm font-semibold animate-bounce bg-white border-slate-200 text-slate-800">
+              <span className={
+                toastMessage.type === 'success' ? 'text-growth-600' :
+                toastMessage.type === 'warning' ? 'text-amber-500' : 'text-brand-600'
+              }>
+                {toastMessage.type === 'success' ? '✅' : toastMessage.type === 'warning' ? '⚠️' : 'ℹ️'}
+              </span>
+              <span>{toastMessage.msg}</span>
+            </div>
+          )}
+
+          {/* CELEBRATION MODAL */}
+          {celebrationModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+              <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-8 shadow-2xl border border-slate-100 text-center animate-scale-up max-h-[92vh] overflow-y-auto">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-growth-100 text-growth-700 flex items-center justify-center text-3xl">
+                  {celebrationModal.isFinal ? '🏆' : '🌱'}
+                </div>
+
+                <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mb-2">
+                  {celebrationModal.isFinal ? '¡Graduación del Programa Conquistada!' : `¡Día ${celebrationModal.dayNum} Completado!`}
+                </h3>
+                
+                <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+                  {celebrationModal.isFinal 
+                    ? 'Has completado los 21 días de formación y práctica sistemática. Tu planta es ahora un árbol maduro y tu método de estudio es sólido y autónomo.'
+                    : `Has cumplido al 100% con todas las acciones programadas para el Día ${celebrationModal.dayNum}. El Día ${celebrationModal.dayNum + 1} ha sido desbloqueado en tu calendario.`
+                  }
+                </p>
+
+                <div className="flex flex-col gap-2.5">
+                  {!celebrationModal.isFinal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = celebrationModal.dayNum + 1;
+                        setCelebrationModal(null);
+                        navigateTo('activity', next);
+                      }}
+                      className="w-full py-3 px-4 rounded-xl text-sm font-semibold bg-growth-600 hover:bg-growth-700 text-white shadow-sm flex items-center justify-center gap-2"
+                    >
+                      Continuar al Día {celebrationModal.dayNum + 1} <Icons.ArrowRight />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCelebrationModal(null);
+                      navigateTo('dashboard');
+                    }}
+                    className="w-full py-2.5 px-4 rounded-xl text-sm font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700"
+                  >
+                    Volver al Dashboard
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* HABIT & MAGNITUDE CONFIGURATION MODAL */}
+          {habitConfigModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+              <div className="bg-white rounded-3xl max-w-xl w-full p-4 sm:p-6 md:p-8 shadow-2xl border border-slate-100 animate-scale-up space-y-5 sm:space-y-6 max-h-[92vh] overflow-y-auto">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                  <div className="flex items-center gap-2.5">
+                    <span className="p-2 bg-brand-50 text-brand-600 rounded-xl">
+                      <Icons.Settings />
+                    </span>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">Personalizar Hábito y Calendario</h3>
+                      <p className="text-xs text-slate-500">Condiciona los lapsos de tiempo según la complejidad real</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setHabitConfigModalOpen(false)}
+                    className="text-slate-400 hover:text-slate-600 p-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Habit Name Input */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                    Nombre del Hábito o Meta
+                  </label>
+                  <input
+                    type="text"
+                    value={editHabitName}
+                    onChange={(e) => setEditHabitName(e.target.value)}
+                    placeholder="Ej. Vencer la procrastinación al estudiar, Ordenar mi cuarto, Leer 1 capítulo diario"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500"
+                  />
+                  {/* Quick Suggestions */}
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <span className="text-[11px] text-slate-400 self-center">Ejemplos:</span>
+                    <button
+                      type="button"
+                      onClick={() => { setEditHabitName('Ordenar y limpiar mi cuarto'); setEditMagnitude('chico'); }}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    >
+                      🧹 Ordenar mi cuarto (Chico)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEditHabitName('Lectura diaria de libros'); setEditMagnitude('mediano'); }}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    >
+                      📖 Lectura diaria (Mediano)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEditHabitName('Estudiar cálculo y materias de carrera'); setEditMagnitude('grande'); }}
+                      className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    >
+                      🧠 Estudiar materias (Grande)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Magnitude Selector (Chico, Mediano, Grande) */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                    Magnitud y Complejidad del Hábito (Condiciona los 21 días)
+                  </label>
+                  
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {Object.values(HABIT_MAGNITUDES).map((mag) => {
+                      const isSelected = editMagnitude === mag.id;
+                      return (
+                        <div
+                          key={mag.id}
+                          onClick={() => setEditMagnitude(mag.id)}
+                          className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex items-start gap-3 ${
+                            isSelected 
+                              ? 'border-brand-500 bg-brand-50/40 shadow-xs' 
+                              : 'border-slate-200 hover:border-slate-300 bg-white'
+                          }`}
+                        >
+                          <div className="text-2xl mt-0.5">{mag.icon}</div>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-sm text-slate-900">{mag.name}</span>
+                              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${mag.badgeBg}`}>
+                                {mag.timeRangeLabel}
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                              {mag.description}
+                            </p>
+                            <p className="text-[11px] text-slate-400 italic mt-1">
+                              <strong>Ejemplos:</strong> {mag.examples}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setHabitConfigModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveHabitConfig(editHabitName, editMagnitude)}
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white shadow-xs"
+                  >
+                    Guardar y Calibrar Calendario
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TOP BAR / NAVIGATION */}
+          <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+              {/* TOP ROW: Brand and Info */}
+              <div className="flex items-center justify-between h-14 sm:h-20">
+                {/* Brand & Habit Title */}
+                <div 
+                  onClick={() => navigateTo('dashboard')}
+                  className="cursor-pointer flex items-center gap-2 sm:gap-2.5 group"
+                >
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-growth-500 flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
+                    <Icons.Leaf />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <span className="font-extrabold text-base sm:text-xl tracking-tight text-slate-900">HabitFlow</span>
+                      <span className="text-[10px] sm:text-[11px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-brand-100 text-brand-800 border border-brand-200">21 Días</span>
+                      <span className={`text-[10px] sm:text-[11px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full border hidden sm:inline-block ${currentMagnitudeConfig.badgeBg}`}>
+                        {currentMagnitudeConfig.icon} {currentMagnitudeConfig.shortName}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 font-medium hidden sm:block truncate max-w-sm">
+                      {appState.activeHabit}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Magnitude badge on mobile (Right side of top row) */}
+                <div className="sm:hidden flex items-center">
+                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full border ${currentMagnitudeConfig.badgeBg}`}>
+                    {currentMagnitudeConfig.icon} {currentMagnitudeConfig.shortName}
+                  </span>
+                </div>
+
+                {/* Desktop Navigation Tabs (Hidden on mobile, visible on sm: and up) */}
+                <nav className="hidden sm:flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigateTo('dashboard')}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${
+                      appState.currentView === 'dashboard'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                    title="Dashboard y Calendario"
+                  >
+                    <Icons.Calendar />
+                    <span className="hidden md:inline">Dashboard y </span>Calendario
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigateTo('activity', appState.currentViewingDay)}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${
+                      appState.currentView === 'activity'
+                        ? 'bg-brand-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                    title="Actividad Diaria"
+                  >
+                    <Icons.Target />
+                    Actividad Diaria
+                    <span className="ml-1 text-[11px] px-1.5 py-0.2 rounded-full bg-white/20 font-mono">
+                      D{appState.currentViewingDay}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigateTo('metrics')}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${
+                      appState.currentView === 'metrics'
+                        ? 'bg-growth-600 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                    }`}
+                    title="Progreso y Métricas Objetivas"
+                  >
+                    <Icons.BarChart />
+                    Progreso y Métricas
+                  </button>
+                </nav>
+              </div>
+
+              {/* MOBILE SEGMENTED CONTROL TABS (Visible only on mobile: sm:hidden) */}
+              <div className="sm:hidden pb-2.5 pt-0.5">
+                <nav className="flex items-center bg-slate-100/90 p-1 rounded-2xl border border-slate-200/80 shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => navigateTo('dashboard')}
+                    className={`flex-1 py-2 px-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                      appState.currentView === 'dashboard'
+                        ? 'bg-slate-900 text-white shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Icons.Calendar />
+                    <span>Calendario</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigateTo('activity', appState.currentViewingDay)}
+                    className={`flex-1 py-2 px-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                      appState.currentView === 'activity'
+                        ? 'bg-brand-600 text-white shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Icons.Target />
+                    <span>Actividad</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/25 font-mono">
+                      D{appState.currentViewingDay}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => navigateTo('metrics')}
+                    className={`flex-1 py-2 px-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                      appState.currentView === 'metrics'
+                        ? 'bg-growth-600 text-white shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <Icons.BarChart />
+                    <span>Métricas</span>
+                  </button>
+                </nav>
+              </div>
+            </div>
+          </header>
+
+          {/* MAIN CONTENT AREA */}
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+            {appState.currentView === 'dashboard' && (
+              <DashboardView 
+                appState={appState} 
+                globalPercentage={globalPercentage}
+                completedDaysCount={completedDaysCount}
+                plantPhase={plantPhase}
+                currentMagnitudeConfig={currentMagnitudeConfig}
+                isDayLocked={isDayLocked}
+                isDayCompleted={isDayCompleted}
+                onSelectDay={(dayNum) => navigateTo('activity', dayNum)}
+                onGoToMetrics={() => navigateTo('metrics')}
+                onOpenConfig={openConfigModal}
+                onChangeMagnitude={(mag) => handleSaveHabitConfig(appState.activeHabit, mag)}
+              />
+            )}
+
+            {appState.currentView === 'activity' && (
+              <DailyActivityView 
+                dayNumber={appState.currentViewingDay}
+                appState={appState}
+                currentMagnitudeConfig={currentMagnitudeConfig}
+                onUpdateField={handleUpdateDayField}
+                onTimerComplete={handleTimerFinished}
+                onFinalizeDay={handleFinalizeDay}
+                isCompleted={isDayCompleted(appState.currentViewingDay)}
+                isLocked={isDayLocked(appState.currentViewingDay)}
+                calculateDayCompletion={calculateDayCompletion}
+                onBackToDashboard={() => navigateTo('dashboard')}
+                onNavigateDay={(dayNum) => navigateTo('activity', dayNum)}
+                onChangeMagnitude={(mag) => handleSaveHabitConfig(appState.activeHabit, mag)}
+              />
+            )}
+
+            {appState.currentView === 'metrics' && (
+              <MetricsView 
+                appState={appState}
+                currentMagnitudeConfig={currentMagnitudeConfig}
+                completedDaysCount={completedDaysCount}
+                globalPercentage={globalPercentage}
+                plantPhase={plantPhase}
+                onResetAll={handleResetAllProgress}
+                onSelectDay={(d) => navigateTo('activity', d)}
+                onOpenConfig={openConfigModal}
+              />
+            )}
+          </main>
+
+          {/* FOOTER */}
+          <footer className="mt-auto bg-white border-t border-slate-200 py-6 text-center text-xs text-slate-500">
+            <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-slate-700">HabitFlow 21 Días</span>
+                <span>•</span>
+                <span>Calendario Calibrado: {currentMagnitudeConfig.name}</span>
+              </div>
+              <div className="text-slate-400">
+                HTML5 localStorage persistente • React 18 & Tailwind CSS
+              </div>
+            </div>
+          </footer>
+        </div>
+      );
+    };
+
+    // ==========================================
+    // VIEW 1: DASHBOARD Y CALENDARIO GENERAL
+    // ==========================================
+    const DashboardView = ({
+      appState,
+      globalPercentage,
+      completedDaysCount,
+      plantPhase,
+      currentMagnitudeConfig,
+      isDayLocked,
+      isDayCompleted,
+      onSelectDay,
+      onGoToMetrics,
+      onOpenConfig,
+      onChangeMagnitude
+    }) => {
+      const currentActiveDay = Math.min(21, (Math.max(0, ...appState.completedDays) + 1));
+
+      return (
+        <div className="space-y-8">
+          {/* HABIT BANNER & HERO CARD */}
+          <div className="bg-gradient-to-r from-slate-900 via-brand-950 to-slate-900 text-white rounded-3xl p-5 sm:p-7 md:p-8 shadow-xl relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-3 max-w-2xl">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/20 text-brand-200 border border-brand-500/30 text-xs font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-growth-400 animate-ping"></span>
+                    Hábito Activo Seleccionado
+                  </span>
+
+                  {/* Magnitude Chip */}
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${currentMagnitudeConfig.badgeBg}`}>
+                    {currentMagnitudeConfig.icon} Magnitud: {currentMagnitudeConfig.shortName}
+                  </span>
+                </div>
+
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white leading-tight">
+                  {appState.activeHabit}
+                </h1>
+                
+                <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
+                  {currentMagnitudeConfig.description}
+                </p>
+
+                {/* Magnitude Selector Bar right on Hero */}
+                <div className="pt-2 flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  <span className="text-xs text-slate-400 font-semibold mr-1 w-full sm:w-auto">Calibrar Magnitud:</span>
+                  {['chico', 'mediano', 'grande'].map(magKey => {
+                    const magObj = HABIT_MAGNITUDES[magKey];
+                    const isSelected = appState.habitMagnitude === magKey;
+                    return (
+                      <button
+                        key={magKey}
+                        type="button"
+                        onClick={() => onChangeMagnitude(magKey)}
+                        className={`text-xs px-2.5 sm:px-3 py-1.5 rounded-xl font-bold border transition-all flex items-center gap-1 sm:gap-1.5 ${
+                          isSelected
+                            ? 'bg-white text-slate-900 border-white shadow-sm'
+                            : 'bg-white/10 hover:bg-white/20 text-slate-300 border-white/10'
+                        }`}
+                      >
+                        <span>{magObj.icon}</span>
+                        <span>{magObj.shortName}</span>
+                        <span className="text-[10px] opacity-75 font-mono">({magObj.timeRangeLabel.split(' ')[0]}-{magObj.timeRangeLabel.split(' ')[2]}m)</span>
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={onOpenConfig}
+                    className="text-xs px-2.5 sm:px-3 py-1.5 rounded-xl bg-brand-600/60 hover:bg-brand-600 text-white font-semibold flex items-center gap-1 transition-all"
+                    title="Editar nombre y detalles del hábito"
+                  >
+                    <Icons.Settings /> Editar Nombre
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Action Button */}
+              <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 sm:gap-3 shrink-0 w-full md:w-auto">
+                <button
+                  type="button"
+                  onClick={() => onSelectDay(currentActiveDay)}
+                  className="w-full sm:w-auto md:w-full px-5 sm:px-6 py-3 sm:py-3.5 rounded-2xl bg-growth-500 hover:bg-growth-600 text-white font-bold text-sm shadow-lg hover:shadow-growth-500/25 transition-all flex items-center justify-center gap-2"
+                >
+                  <Icons.Play /> Continuar Día {currentActiveDay}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={onGoToMetrics}
+                  className="w-full sm:w-auto md:w-full px-4 sm:px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 font-semibold text-xs transition-all text-center"
+                >
+                  Ver Métricas Objetivas
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* TWO COLUMNS: VIRTUAL PLANT & GLOBAL PROGRESS */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Col: Virtual Plant Evolution (5 cols) */}
+            <div className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 rounded-xl bg-growth-50 text-growth-700">
+                      <Icons.Leaf />
+                    </span>
+                    <div>
+                      <h3 className="font-bold text-slate-900 text-base">Planta Virtual de Hábito</h3>
+                      <p className="text-xs text-slate-500">Evolución biológica por constancia</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-growth-100 text-growth-800 border border-growth-200">
+                    Fase {plantPhase.phase} de 5
+                  </span>
+                </div>
+
+                {/* SVG Visual */}
+                <VirtualPlantVisual phase={plantPhase.phase} />
+
+                {/* Botanical Details */}
+                <div className="mt-4 text-center">
+                  <h4 className="text-lg font-extrabold text-slate-800">{plantPhase.name}</h4>
+                  <p className="text-xs font-semibold text-growth-600 mb-2">{plantPhase.range} • {completedDaysCount} de 21 días</p>
+                  <p className="text-xs text-slate-600 italic bg-slate-50 rounded-xl p-3 border border-slate-100">
+                    {plantPhase.description}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
+                <span>Progreso: {globalPercentage}%</span>
+                <span className="text-brand-600 font-semibold">{plantPhase.quote}</span>
+              </div>
+            </div>
+
+            {/* Right Col: Global Progress & Featured Next Step (7 cols) */}
+            <div className="lg:col-span-7 flex flex-col gap-6">
+              {/* Progress Summary Card */}
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-base">Progreso General del Programa</h3>
+                    <p className="text-xs text-slate-500">
+                      Calendario activo: <span className="font-semibold text-slate-800">{currentMagnitudeConfig.name}</span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-black text-brand-600">{globalPercentage}%</span>
+                    <p className="text-[11px] text-slate-400 font-medium">{completedDaysCount} / 21 Días</p>
+                  </div>
+                </div>
+
+                {/* Big Progress Bar */}
+                <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                  <div 
+                    className="h-full bg-gradient-to-r from-brand-500 via-indigo-500 to-growth-500 rounded-full transition-all duration-700 ease-out shadow-xs"
+                    style={{ width: `${globalPercentage}%` }}
+                  ></div>
+                </div>
+
+                {/* Mini Stats Grid */}
+                <div className="grid grid-cols-3 gap-3 mt-6 pt-4 border-t border-slate-100 text-center">
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                    <p className="text-xs text-slate-500 font-medium mb-1">Días Completos</p>
+                    <p className="text-xl font-bold text-slate-900">{completedDaysCount} <span className="text-xs text-slate-400 font-normal">/ 21</span></p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                    <p className="text-xs text-slate-500 font-medium mb-1">Minutos Foco</p>
+                    <p className="text-xl font-bold text-brand-600">{appState.metrics.focusMinutes || 0} <span className="text-xs text-slate-400 font-normal">min</span></p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                    <p className="text-xs text-slate-500 font-medium mb-1">Día Actual</p>
+                    <p className="text-xl font-bold text-growth-600">Día {currentActiveDay}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* FEATURED CARD: "Mi Próximo Paso" (Day 9) */}
+              <div className="bg-gradient-to-br from-brand-50/70 via-white to-growth-50/40 rounded-3xl p-6 border border-brand-200 shadow-sm relative overflow-hidden">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 rounded-xl bg-brand-100 text-brand-700">
+                      <Icons.Sparkles />
+                    </span>
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-sm">Tarjeta Destacada: Mi Próximo Paso</h4>
+                      <p className="text-[11px] text-slate-500">Anticipación para eliminar fricción</p>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white text-slate-600 border border-slate-200">
+                    Día 9
+                  </span>
+                </div>
+
+                {appState.featuredNextStep ? (
+                  <div className="space-y-3 bg-white p-4 rounded-2xl border border-brand-100 shadow-2xs">
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-brand-600">Acción Inmediata:</span>
+                      <p className="text-sm font-semibold text-slate-800 mt-0.5">{appState.featuredNextStep.step}</p>
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Materiales Requeridos:</span>
+                      <p className="text-xs text-slate-600 mt-0.5">{appState.featuredNextStep.materials}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white/80 p-4 rounded-2xl border border-dashed border-slate-200 text-center">
+                    <p className="text-xs text-slate-500 italic">
+                      Completa el Día 9 para desbloquear tu tarjeta destacada con tu próximo paso inmediato y materiales listos.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 21-DAY CALENDAR GRID CONDITIONED BY MAGNITUDE */}
+          <div className="space-y-8 pt-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Calendario Condicionado de los 21 Días</h2>
+                  <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${currentMagnitudeConfig.badgeBg}`}>
+                    {currentMagnitudeConfig.icon} {currentMagnitudeConfig.name}
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                  Lapsos de tiempo adaptados a la complejidad del hábito ({currentMagnitudeConfig.timeRangeLabel}). Desbloqueo secuencial estricto.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-xs font-semibold">
+                <span className="flex items-center gap-1.5 text-slate-400"><Icons.Lock /> Bloqueado</span>
+                <span className="flex items-center gap-1.5 text-brand-600"><span className="w-2 h-2 rounded-full bg-brand-500"></span> En curso</span>
+                <span className="flex items-center gap-1.5 text-growth-600"><Icons.Check /> Completado</span>
+              </div>
+            </div>
+
+            {/* Stages Grid */}
+            {PROGRAM_STAGES.map(stage => {
+              const stageDays = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
+                .filter(d => (d <= 7 ? 1 : d <= 14 ? 2 : 3) === stage.id)
+                .map(d => getDayConfig(d, appState.habitMagnitude));
+
+              return (
+                <div key={stage.id} className="space-y-4">
+                  <div className="flex items-center justify-between bg-slate-100/70 px-4 py-2.5 rounded-2xl border border-slate-200">
+                    <span className="font-bold text-slate-800 text-sm">{stage.name}</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-white text-slate-600 border border-slate-200">
+                      {stage.days}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3.5">
+                    {stageDays.map(item => {
+                      const locked = isDayLocked(item.day);
+                      const completed = isDayCompleted(item.day);
+                      const isCurrent = item.day === currentActiveDay;
+
+                      return (
+                        <div
+                          key={item.day}
+                          onClick={() => onSelectDay(item.day)}
+                          className={`group relative rounded-2xl p-4 border transition-all duration-200 flex flex-col justify-between cursor-pointer ${
+                            locked 
+                              ? 'bg-slate-50/80 border-slate-200 text-slate-400 hover:border-slate-300' 
+                              : completed
+                                ? 'bg-white border-growth-200 hover:border-growth-400 hover:shadow-md'
+                                : isCurrent
+                                  ? 'bg-white border-brand-500 shadow-md ring-2 ring-brand-500/20'
+                                  : 'bg-white border-slate-200 hover:border-brand-300 hover:shadow-sm'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded-lg ${
+                              completed 
+                                ? 'bg-growth-100 text-growth-800' 
+                                : isCurrent 
+                                  ? 'bg-brand-100 text-brand-800' 
+                                  : 'bg-slate-100 text-slate-500'
+                            }`}>
+                              Día {item.day}
+                            </span>
+
+                            <div className="text-slate-400">
+                              {locked ? (
+                                <Icons.Lock />
+                              ) : completed ? (
+                                <span className="text-growth-600 font-bold"><Icons.Check /></span>
+                              ) : (
+                                <span className="w-2.5 h-2.5 rounded-full bg-brand-500 animate-pulse"></span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="my-1">
+                            <h4 className={`text-xs font-semibold leading-tight line-clamp-2 ${
+                              locked ? 'text-slate-400' : 'text-slate-800 group-hover:text-brand-600'
+                            }`}>
+                              {item.title}
+                            </h4>
+                          </div>
+
+                          <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                            <span className="font-mono text-slate-500 flex items-center gap-1 font-semibold">
+                              <Icons.Clock /> {item.duration}m
+                            </span>
+                            <span className="font-medium text-slate-400 group-hover:text-slate-700">
+                              {completed ? 'Ver' : locked ? 'Bloq.' : 'Iniciar'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
+
+    // ==========================================
+    // VIEW 2: PANTALLA DE ACTIVIDAD DIARIA
+    // ==========================================
+    const DailyActivityView = ({
+      dayNumber,
+      appState,
+      currentMagnitudeConfig,
+      onUpdateField,
+      onTimerComplete,
+      onFinalizeDay,
+      isCompleted,
+      isLocked,
+      calculateDayCompletion,
+      onBackToDashboard,
+      onNavigateDay,
+      onChangeMagnitude
+    }) => {
+      const config = getDayConfig(dayNumber, appState.habitMagnitude);
+      const dayData = appState.dayData[dayNumber] || {};
+      const dayPercentage = calculateDayCompletion(dayNumber);
+      const readOnly = isCompleted;
+
+      const day1Task = appState.dayData[1]?.taskName || appState.activeHabit;
+      const day2Step1 = appState.dayData[2]?.step1 || 'Primer micro-paso ordenado';
+
+      return (
+        <div className="max-w-4xl mx-auto space-y-6 pb-20">
+          {/* TOP BREADCRUMB & DAY SELECTOR */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs">
+            <button
+              type="button"
+              onClick={onBackToDashboard}
+              className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600 hover:text-slate-900 group self-start sm:self-auto"
+            >
+              <Icons.ArrowLeft />
+              <span>Volver al Calendario</span>
+            </button>
+
+            <div className="flex items-center justify-between sm:justify-end gap-1.5 sm:gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                disabled={dayNumber <= 1}
+                onClick={() => onNavigateDay(dayNumber - 1)}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Día anterior"
+              >
+                ◀ Día {dayNumber - 1}
+              </button>
+
+              <span className="text-xs font-bold px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900 text-white shrink-0 text-center">
+                Día {dayNumber} de 21
+              </span>
+
+              <button
+                type="button"
+                disabled={dayNumber >= 21}
+                onClick={() => onNavigateDay(dayNumber + 1)}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Siguiente día"
+              >
+                Día {dayNumber + 1} ▶
+              </button>
+            </div>
+          </div>
+
+          {/* READ-ONLY BANNER IF COMPLETED */}
+          {readOnly && (
+            <div className="bg-growth-50 border border-growth-200 rounded-2xl p-4 flex items-center justify-between gap-3 text-growth-900">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🛡️</span>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-bold">Modo de Solo Consulta (Lectura)</h4>
+                  <p className="text-xs text-growth-700">Este día ya fue finalizado y guardado con éxito. Tus respuestas están protegidas.</p>
+                </div>
+              </div>
+              <span className="text-xs font-bold px-3 py-1 rounded-full bg-growth-600 text-white shrink-0">
+                100% Completado
+              </span>
+            </div>
+          )}
+
+          {/* HEADER CARD */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-brand-600 bg-brand-50 px-3 py-1 rounded-full border border-brand-100">
+                  Etapa {config.stage} • {PROGRAM_STAGES[config.stage - 1].name}
+                </span>
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${currentMagnitudeConfig.badgeBg}`}>
+                  {currentMagnitudeConfig.icon} {currentMagnitudeConfig.shortName}
+                </span>
+              </div>
+
+              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-700 flex items-center gap-1.5">
+                <Icons.Clock /> Duración calibrada: {config.duration} minutos
+              </span>
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
+              {config.title}
+            </h1>
+
+            <p className="text-sm text-slate-600 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              💡 <span className="font-semibold text-slate-800">Propósito:</span> {config.purpose}
+            </p>
+
+            {/* Daily Dynamic Progress Bar */}
+            <div className="space-y-1.5 pt-2">
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <span className="text-slate-600">Progreso requerido de este día:</span>
+                <span className={dayPercentage === 100 ? 'text-growth-600 font-bold' : 'text-brand-600'}>
+                  {dayPercentage}% ({dayPercentage === 100 ? 'Listo para guardar' : 'Pendiente'})
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
+                <div 
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    dayPercentage === 100 ? 'bg-growth-500' : 'bg-brand-500'
+                  }`}
+                  style={{ width: `${dayPercentage}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          {/* DYNAMIC FORM / ACTIVITIES SPECIFIC TO EACH DAY (1 TO 21) */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
+            <h3 className="text-lg font-bold text-slate-900 border-b border-slate-100 pb-3 flex items-center gap-2">
+              <Icons.Target /> Acciones Requeridas para el Día {dayNumber}
+            </h3>
+
+            {/* DAY 1 */}
+            {dayNumber === 1 && (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    1. Nombre de la tarea o hábito a iniciar *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.taskName !== undefined ? dayData.taskName : appState.activeHabit}
+                    onChange={(e) => onUpdateField(1, 'taskName', e.target.value)}
+                    placeholder="Ej. Ordenar mi cuarto, Estudiar cálculo diferencial, Leer 1 capítulo"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500 disabled:bg-slate-50"
+                  />
+                </div>
+
+                {/* Magnitude selector dropdown inside Day 1 registration */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    2. Selecciona la Magnitud / Complejidad del Hábito * (Condiciona los lapsos del calendario)
+                  </label>
+                  <select
+                    disabled={readOnly}
+                    value={appState.habitMagnitude}
+                    onChange={(e) => onChangeMagnitude(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold bg-white focus:ring-2 focus:ring-brand-500"
+                  >
+                    <option value="chico">🟢 Chico: Baja complejidad / Tareas físicas rápidas (2 a 10 min por día)</option>
+                    <option value="mediano">🔵 Mediano: Complejidad moderada / Rutinas diarias (5 a 23 min por día)</option>
+                    <option value="grande">🟣 Grande: Alta demanda cognitiva / Estudio y tesis (5 a 30 min por día)</option>
+                  </select>
+                  <p className="text-xs text-slate-500">
+                    {currentMagnitudeConfig.description}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    3. Categoría de la tarea *
+                  </label>
+                  <select
+                    disabled={readOnly}
+                    value={dayData.category || ''}
+                    onChange={(e) => onUpdateField(1, 'category', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500 disabled:bg-slate-50"
+                  >
+                    <option value="">Selecciona una categoría...</option>
+                    <option value="Hogar">Hogar / Orden Personal</option>
+                    <option value="Escuela">Escuela / Universidad</option>
+                    <option value="Trabajo">Trabajo / Profesional</option>
+                    <option value="Personal">Personal / Salud y Bienestar</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    4. Primera acción mínima (fricción cero) *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.firstAction || ''}
+                    onChange={(e) => onUpdateField(1, 'firstAction', e.target.value)}
+                    placeholder="Ej. Recoger las prendas del suelo, Abrir el libro en la página 10"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-brand-500 disabled:bg-slate-50"
+                  />
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`5. Temporizador Calibrado para Hábito ${currentMagnitudeConfig.shortName} (${config.duration} min)`}
+                  onComplete={(mins) => onTimerComplete(1, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+              </div>
+            )}
+
+            {/* DAY 2 */}
+            {dayNumber === 2 && (
+              <div className="space-y-5">
+                <div className="p-3.5 bg-brand-50/60 rounded-xl border border-brand-100 text-xs text-brand-900">
+                  <span className="font-bold">Tarea del Día 1:</span> {day1Task}
+                </div>
+
+                <p className="text-xs text-slate-500">Divide tu tarea en tres micro-pasos ordenados cronológicamente:</p>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Paso 1 (Inmediato):</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={dayData.step1 || ''}
+                      onChange={(e) => onUpdateField(2, 'step1', e.target.value)}
+                      placeholder="Ej. Despejar la superficie de la mesa / Reunir apuntes"
+                      className="w-full px-4 py-2 rounded-xl border border-slate-200 text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Paso 2 (Desarrollo):</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={dayData.step2 || ''}
+                      onChange={(e) => onUpdateField(2, 'step2', e.target.value)}
+                      placeholder="Ej. Guardar objetos fuera de lugar / Resolver 3 problemas"
+                      className="w-full px-4 py-2 rounded-xl border border-slate-200 text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Paso 3 (Cierre):</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={dayData.step3 || ''}
+                      onChange={(e) => onUpdateField(2, 'step3', e.target.value)}
+                      placeholder="Ej. Limpiar el polvo / Revisar respuestas con la guía"
+                      className="w-full px-4 py-2 rounded-xl border border-slate-200 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`Organizar y estructurar los pasos (${config.duration} min)`}
+                  onComplete={(mins) => onTimerComplete(2, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+              </div>
+            )}
+
+            {/* DAY 3 */}
+            {dayNumber === 3 && (
+              <div className="space-y-5">
+                <div className="p-3.5 bg-growth-50/70 rounded-xl border border-growth-200 text-xs text-growth-900">
+                  <span className="font-bold">Foco de hoy en Paso 1:</span> {day2Step1}
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`Ejecución de ${config.duration} min en el Paso 1 (${currentMagnitudeConfig.shortName})`}
+                  onComplete={(mins) => onTimerComplete(3, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    ¿Lograste ejecutar el Paso 1 durante los {config.duration} minutos? *
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 text-sm text-slate-800 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="step1Executed"
+                        disabled={readOnly}
+                        checked={dayData.step1Executed === 'yes'}
+                        onChange={() => onUpdateField(3, 'step1Executed', 'yes')}
+                        className="text-growth-600"
+                      />
+                      Sí, logré avanzar
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-800 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="step1Executed"
+                        disabled={readOnly}
+                        checked={dayData.step1Executed === 'no'}
+                        onChange={() => onUpdateField(3, 'step1Executed', 'no')}
+                        className="text-amber-600"
+                      />
+                      No, me costó concentrarme
+                    </label>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Breve nota de reflexión o resultado *
+                  </label>
+                  <textarea
+                    rows="2"
+                    disabled={readOnly}
+                    value={dayData.reflection || ''}
+                    onChange={(e) => onUpdateField(3, 'reflection', e.target.value)}
+                    placeholder="¿Cómo se sintió romper la inercia inicial?"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  ></textarea>
+                </div>
+              </div>
+            )}
+
+            {/* DAY 4 */}
+            {dayNumber === 4 && (
+              <div className="space-y-5">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Checklist de 3 elementos de espacio y entorno:
+                  </span>
+
+                  <label className="flex items-center gap-3 text-sm text-slate-800 cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
+                    <input
+                      type="checkbox"
+                      disabled={readOnly}
+                      checked={!!dayData.cleanSpace}
+                      onChange={(e) => onUpdateField(4, 'cleanSpace', e.target.checked)}
+                      className="w-4 h-4 text-growth-600 rounded"
+                    />
+                    <span>1. <strong>Espacio despejado:</strong> Mesa o área limpia, sin objetos distractores.</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 text-sm text-slate-800 cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
+                    <input
+                      type="checkbox"
+                      disabled={readOnly}
+                      checked={!!dayData.readyMaterials}
+                      onChange={(e) => onUpdateField(4, 'readyMaterials', e.target.checked)}
+                      className="w-4 h-4 text-growth-600 rounded"
+                    />
+                    <span>2. <strong>Materiales listos:</strong> Herramientas, libreta o insumos necesarios a mano.</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 text-sm text-slate-800 cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
+                    <input
+                      type="checkbox"
+                      disabled={readOnly}
+                      checked={!!dayData.devicePrepared}
+                      onChange={(e) => onUpdateField(4, 'devicePrepared', e.target.checked)}
+                      className="w-4 h-4 text-growth-600 rounded"
+                    />
+                    <span>3. <strong>Dispositivo preparado:</strong> Celular en no molestar, pantallas distractoras apagadas.</span>
+                  </label>
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`Acondicionamiento y prueba del entorno (${config.duration} min)`}
+                  onComplete={(mins) => onTimerComplete(4, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+              </div>
+            )}
+
+            {/* DAY 5 */}
+            {dayNumber === 5 && (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    1. Distracción principal detectada *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.mainDistraction || ''}
+                    onChange={(e) => onUpdateField(5, 'mainDistraction', e.target.value)}
+                    placeholder="Ej. Redes sociales, ruido de la casa, levantarse por agua"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    2. Regla de mitigación concreta *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.mitigationRule || ''}
+                    onChange={(e) => onUpdateField(5, 'mitigationRule', e.target.value)}
+                    placeholder="Ej. Dejar el celular en otra habitación durante los minutos de acción"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`Sesión de prueba aplicando regla (${config.duration} min)`}
+                  onComplete={(mins) => onTimerComplete(5, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+              </div>
+            )}
+
+            {/* DAY 6 */}
+            {dayNumber === 6 && (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    1. Registra 3 pendientes o áreas de trabajo *
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={dayData.pending1 || ''}
+                      onChange={(e) => onUpdateField(6, 'pending1', e.target.value)}
+                      placeholder="Pendiente A"
+                      className="px-3 py-2 rounded-xl border border-slate-200 text-sm"
+                    />
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={dayData.pending2 || ''}
+                      onChange={(e) => onUpdateField(6, 'pending2', e.target.value)}
+                      placeholder="Pendiente B"
+                      className="px-3 py-2 rounded-xl border border-slate-200 text-sm"
+                    />
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={dayData.pending3 || ''}
+                      onChange={(e) => onUpdateField(6, 'pending3', e.target.value)}
+                      placeholder="Pendiente C"
+                      className="px-3 py-2 rounded-xl border border-slate-200 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    2. Selecciona la prioridad #1 absoluta *
+                  </label>
+                  <select
+                    disabled={readOnly}
+                    value={dayData.chosenPriority || ''}
+                    onChange={(e) => onUpdateField(6, 'chosenPriority', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  >
+                    <option value="">Selecciona la prioridad más crítica...</option>
+                    {dayData.pending1 && <option value={dayData.pending1}>Pendiente A: {dayData.pending1}</option>}
+                    {dayData.pending2 && <option value={dayData.pending2}>Pendiente B: {dayData.pending2}</option>}
+                    {dayData.pending3 && <option value={dayData.pending3}>Pendiente C: {dayData.pending3}</option>}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    3. Escribe el primer paso concreto de esta prioridad *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.firstStepPriority || ''}
+                    onChange={(e) => onUpdateField(6, 'firstStepPriority', e.target.value)}
+                    placeholder="Ej. Concluir la primera sección"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`Trabajo enfocado en prioridad #1 (${config.duration} min)`}
+                  onComplete={(mins) => onTimerComplete(6, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+              </div>
+            )}
+
+            {/* DAY 7 */}
+            {dayNumber === 7 && (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    1. Calificación de tu consistencia en la Semana 1 (1 a 5 estrellas) *
+                  </label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <button
+                        key={star}
+                        type="button"
+                        disabled={readOnly}
+                        onClick={() => onUpdateField(7, 'week1Rating', star)}
+                        className={`text-2xl p-2 rounded-xl border transition-all ${
+                          (dayData.week1Rating || 0) >= star
+                            ? 'bg-amber-100 border-amber-300 text-amber-500 scale-105'
+                            : 'bg-slate-50 border-slate-200 text-slate-300'
+                        }`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    2. ¿Cuál fue tu mayor logro al vencer la resistencia inicial? *
+                  </label>
+                  <textarea
+                    rows="3"
+                    disabled={readOnly}
+                    value={dayData.biggestBreakthrough || ''}
+                    onChange={(e) => onUpdateField(7, 'biggestBreakthrough', e.target.value)}
+                    placeholder="Ej. Comprobar que en pocos minutos se rompe la flojera."
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  ></textarea>
+                </div>
+
+                <div className="bg-brand-50/70 p-5 rounded-2xl border border-brand-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-brand-900 text-sm">Resumen Ejecutivo de Semana 1</h4>
+                      <p className="text-xs text-brand-700">Consolida tu primer hito del programa</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={readOnly || dayData.summaryGenerated}
+                      onClick={() => onUpdateField(7, 'summaryGenerated', true)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                        dayData.summaryGenerated 
+                          ? 'bg-growth-600 text-white' 
+                          : 'bg-brand-600 hover:bg-brand-700 text-white shadow-xs'
+                      }`}
+                    >
+                      {dayData.summaryGenerated ? '✓ Resumen Generado' : 'Generar Resumen'}
+                    </button>
+                  </div>
+
+                  {dayData.summaryGenerated && (
+                    <div className="bg-white p-4 rounded-xl border border-brand-100 text-xs text-slate-700 space-y-1.5 animate-fadeIn">
+                      <p>✅ <strong>Hábito en curso:</strong> {appState.activeHabit}</p>
+                      <p>📊 <strong>Magnitud del calendario:</strong> {currentMagnitudeConfig.name}</p>
+                      <p>⏱️ <strong>Minutos de enfoque completados:</strong> {appState.metrics.focusMinutes} minutos</p>
+                      <p>🌱 <strong>Estado botánico:</strong> Fase 2 (Brote emergente)</p>
+                      <p className="text-growth-700 font-semibold mt-2">¡Etapa 1 superada con éxito! Listo para la consistencia horaria en la Etapa 2.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* DAY 8 */}
+            {dayNumber === 8 && (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    1. Definir hora programada de inicio de sesión *
+                  </label>
+                  <input
+                    type="time"
+                    disabled={readOnly}
+                    value={dayData.scheduledTime || '16:00'}
+                    onChange={(e) => onUpdateField(8, 'scheduledTime', e.target.value)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 text-sm"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">Margen de puntualidad tolerado: 15 minutos respecto a la hora programada.</p>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-xs font-bold text-slate-800">2. Registro de puntualidad real:</span>
+                    <p className="text-xs text-slate-500">
+                      {dayData.punctualityRecorded 
+                        ? `Registrado: ${dayData.actualTime} (${dayData.isOnTime ? '¡Puntual dentro del margen!' : 'Fuera del margen'})`
+                        : 'Haz clic al comenzar para verificar puntualidad objetiva.'}
+                    </p>
+                  </div>
+                  {!readOnly && !dayData.punctualityRecorded && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        const isOnTime = true;
+                        onUpdateField(8, 'punctualityRecorded', true);
+                        onUpdateField(8, 'actualTime', timeStr);
+                        onUpdateField(8, 'isOnTime', isOnTime);
+
+                        setAppState(prev => ({
+                          ...prev,
+                          metrics: {
+                            ...prev.metrics,
+                            punctualityLogs: [
+                              ...(prev.metrics.punctualityLogs || []),
+                              { day: 8, scheduled: dayData.scheduledTime || '16:00', actual: timeStr, isOnTime }
+                            ]
+                          }
+                        }));
+                        showToast('Hora de inicio registrada con puntualidad verificada.', 'success');
+                      }}
+                      className="px-4 py-2 rounded-xl bg-brand-600 text-white font-semibold text-xs shadow-xs hover:bg-brand-700"
+                    >
+                      Registrar Inicio Ahora
+                    </button>
+                  )}
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`3. Temporizador de Puntualidad (${config.duration} min - ${currentMagnitudeConfig.shortName})`}
+                  onComplete={(mins) => onTimerComplete(8, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+              </div>
+            )}
+
+            {/* DAY 9 */}
+            {dayNumber === 9 && (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    1. Registrar "Mi Próximo Paso" *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.nextStep || ''}
+                    onChange={(e) => onUpdateField(9, 'nextStep', e.target.value)}
+                    placeholder="Ej. Resolver ejercicios impares / Doblar y acomodar ropa limpia"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                  <p className="text-[11px] text-brand-600 mt-1 font-medium">
+                    📌 Este paso se mostrará como Tarjeta Destacada en el Dashboard para mantener la tracción.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    2. Materiales requeridos para este paso *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.requiredMaterials || ''}
+                    onChange={(e) => onUpdateField(9, 'requiredMaterials', e.target.value)}
+                    placeholder="Ej. Libreta y calculadora / Canasta de ropa y ganchos"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`3. Preparación y avance inicial (${config.duration} min)`}
+                  onComplete={(mins) => onTimerComplete(9, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+              </div>
+            )}
+
+            {/* DAY 10 */}
+            {dayNumber === 10 && (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    1. Objetivo único de este bloque sostenido *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.focusGoal || ''}
+                    onChange={(e) => onUpdateField(10, 'focusGoal', e.target.value)}
+                    placeholder="Ej. Concluir la lectura del tema / Dejar el clóset organizado"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`2. Temporizador de Enfoque Sostenido (${config.duration} min - ${currentMagnitudeConfig.shortName})`}
+                  onComplete={(mins) => onTimerComplete(10, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    3. Reporte de avance al finalizar los {config.duration} min *
+                  </label>
+                  <textarea
+                    rows="3"
+                    disabled={readOnly}
+                    value={dayData.progressReport || ''}
+                    onChange={(e) => onUpdateField(10, 'progressReport', e.target.value)}
+                    placeholder={`¿Qué lograste concluir en estos ${config.duration} minutos continuos?`}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  ></textarea>
+                </div>
+              </div>
+            )}
+
+            {/* DAY 11 */}
+            {dayNumber === 11 && (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    1. Seleccionar o registrar paso pendiente en curso *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.selectedPendingStep || ''}
+                    onChange={(e) => onUpdateField(11, 'selectedPendingStep', e.target.value)}
+                    placeholder="Ej. Revisión y corrección de las notas / Ordenar gaveta inferior"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`2. Temporizador de Tracción Continua (${config.duration} min)`}
+                  onComplete={(mins) => onTimerComplete(11, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    3. Actualizar estado del paso tras la sesión *
+                  </label>
+                  <select
+                    disabled={readOnly}
+                    value={dayData.stepStatus || ''}
+                    onChange={(e) => onUpdateField(11, 'stepStatus', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  >
+                    <option value="">Selecciona el nuevo estado...</option>
+                    <option value="completed">Completado al 100%</option>
+                    <option value="in_progress">Avanzado (En progreso fluido)</option>
+                    <option value="requires_more">Requiere otra sesión complementaria</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* DAY 12 */}
+            {dayNumber === 12 && (
+              <div className="space-y-5">
+                <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl text-xs text-amber-900">
+                  <strong>Principio de Premack:</strong> Vincula una actividad de ocio como consecuencia de realizar primero la sesión de estudio u orden.
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    1. Actividad de ocio que deseas disfrutar después *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.leisureActivity || ''}
+                    onChange={(e) => onUpdateField(12, 'leisureActivity', e.target.value)}
+                    placeholder="Ej. Ver 1 episodio de mi serie favorita, jugar 20 min"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    2. Tarea vinculada a completar primero *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.linkedTask || ''}
+                    onChange={(e) => onUpdateField(12, 'linkedTask', e.target.value)}
+                    placeholder="Ej. Resolver 5 preguntas de examen / Guardar toda la ropa limpia"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`3. Temporizador previo de Enfoque (${config.duration} min)`}
+                  onComplete={(mins) => onTimerComplete(12, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+
+                <label className="flex items-center gap-3 text-sm text-slate-800 cursor-pointer p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <input
+                    type="checkbox"
+                    disabled={readOnly}
+                    checked={!!dayData.premackConfirmed}
+                    onChange={(e) => onUpdateField(12, 'premackConfirmed', e.target.checked)}
+                    className="w-4 h-4 text-growth-600 rounded"
+                  />
+                  <span>4. <strong>Confirmación de orden:</strong> Confirmo que completé primero los {config.duration} min de la tarea antes de acceder al ocio.</span>
+                </label>
+              </div>
+            )}
+
+            {/* DAY 13 */}
+            {dayNumber === 13 && (
+              <div className="space-y-5">
+                <div className="p-3 bg-brand-50 border border-brand-200 rounded-xl text-xs text-brand-900">
+                  <strong>Estructura guiada de 3 fases ({config.duration} min totales):</strong> Adaptada para perfil {currentMagnitudeConfig.shortName}.
+                </div>
+
+                <NativeTimer
+                  sequence={config.sequence}
+                  label={`Temporizador Guiado Secuencial (${config.duration} min totales)`}
+                  onComplete={(mins) => onTimerComplete(13, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    Evaluación de fatiga y fluidez de la sesión *
+                  </label>
+                  <select
+                    disabled={readOnly}
+                    value={dayData.sessionFeelings || ''}
+                    onChange={(e) => onUpdateField(13, 'sessionFeelings', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  >
+                    <option value="">Selecciona tu sensación...</option>
+                    <option value="excelente">Excelente: el descanso intermedio recargó mi energía</option>
+                    <option value="buena">Buena: completé ambos bloques sin perder el ritmo</option>
+                    <option value="pesada">Pesada: me costó retomar tras la pausa, requiere más práctica</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* DAY 14 */}
+            {dayNumber === 14 && (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    1. Selecciona exactamente tus 2 estrategias favoritas hasta ahora * (Seleccionadas: {(dayData.topStrategies || []).length}/2)
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {[
+                      'Micro-pasos de fricción cero',
+                      'Checklist de acondicionamiento de espacio',
+                      'Regla de mitigación de celular',
+                      'Compromiso de hora y puntualidad',
+                      'Principio de Premack (ocio condicionado)',
+                      'Bloques secuenciales guiados'
+                    ].map(strat => {
+                      const selected = (dayData.topStrategies || []).includes(strat);
+                      return (
+                        <label 
+                          key={strat}
+                          className={`p-3 rounded-xl border cursor-pointer flex items-center gap-2.5 transition-all ${
+                            selected 
+                              ? 'bg-brand-50 border-brand-300 text-brand-900 font-semibold' 
+                              : 'bg-white border-slate-200 text-slate-700'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            disabled={readOnly}
+                            checked={selected}
+                            onChange={(e) => {
+                              const current = dayData.topStrategies || [];
+                              if (e.target.checked) {
+                                if (current.length < 2) {
+                                  onUpdateField(14, 'topStrategies', [...current, strat]);
+                                }
+                              } else {
+                                onUpdateField(14, 'topStrategies', current.filter(s => s !== strat));
+                              }
+                            }}
+                            className="rounded text-brand-600"
+                          />
+                          <span>{strat}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    2. Comparativa de inicio: Semana 1 vs Semana 2 *
+                  </label>
+                  <select
+                    disabled={readOnly}
+                    value={dayData.weekComparison || ''}
+                    onChange={(e) => onUpdateField(14, 'weekComparison', e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  >
+                    <option value="">¿Cómo se compara tu facilidad para comenzar la tarea?</option>
+                    <option value="mucho_mas_facil">Mucho más fácil: ya no siento esa parálisis inicial</option>
+                    <option value="algo_mas_facil">Algo más fácil: aún dudo, pero el temporizador me destraba</option>
+                    <option value="similar">Similar: necesito seguir consolidando la rutina</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    3. Reflexión de consolidación de mitad de programa *
+                  </label>
+                  <textarea
+                    rows="3"
+                    disabled={readOnly}
+                    value={dayData.week2Reflection || ''}
+                    onChange={(e) => onUpdateField(14, 'week2Reflection', e.target.value)}
+                    placeholder="¿Qué cambio concreto has notado al realizar esta actividad?"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  ></textarea>
+                </div>
+              </div>
+            )}
+
+            {/* DAY 15 */}
+            {dayNumber === 15 && (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    1. Prioriza 3 tareas pendientes (1 a 3) *
+                  </label>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={dayData.task1 || ''}
+                      onChange={(e) => onUpdateField(15, 'task1', e.target.value)}
+                      placeholder="#1 Alta Prioridad (La más crítica)"
+                      className="w-full px-4 py-2 rounded-xl border border-brand-300 text-sm bg-brand-50/30"
+                    />
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={dayData.task2 || ''}
+                      onChange={(e) => onUpdateField(15, 'task2', e.target.value)}
+                      placeholder="#2 Prioridad Media"
+                      className="w-full px-4 py-2 rounded-xl border border-slate-200 text-sm"
+                    />
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={dayData.task3 || ''}
+                      onChange={(e) => onUpdateField(15, 'task3', e.target.value)}
+                      placeholder="#3 Prioridad Baja (Secundaria)"
+                      className="w-full px-4 py-2 rounded-xl border border-slate-200 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    2. Acción concreta inmediata para la Tarea #1 *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.actionForTask1 || ''}
+                    onChange={(e) => {
+                      onUpdateField(15, 'actionForTask1', e.target.value);
+                      onUpdateField(15, 'task1PrioritySet', true);
+                    }}
+                    placeholder="Ej. Resolver la parte principal / Limpiar el área más visible"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`3. Temporizador de Trabajo Exclusivo en Tarea #1 (${config.duration} min)`}
+                  onComplete={(mins) => onTimerComplete(15, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+              </div>
+            )}
+
+            {/* DAY 16 */}
+            {dayNumber === 16 && (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    1. Registrar la tarea que más has estado evitando o postergando *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.avoidedTask || ''}
+                    onChange={(e) => onUpdateField(16, 'avoidedTask', e.target.value)}
+                    placeholder="Ej. El tema más difícil / La zona más desordenada de la habitación"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    2. Definir una micro-acción de {config.duration} minutos sobre ella *
+                  </label>
+                  <input
+                    type="text"
+                    disabled={readOnly}
+                    value={dayData.microAction5m || ''}
+                    onChange={(e) => onUpdateField(16, 'microAction5m', e.target.value)}
+                    placeholder="Ej. Solo sacar los primeros 5 objetos / Leer el primer subtema"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  />
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`3. Temporizador de Desbloqueo (${config.duration} min - ${currentMagnitudeConfig.shortName})`}
+                  onComplete={(mins) => onTimerComplete(16, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    4. Confirmación: ¿Rompiste la fricción inicial sobre esta tarea evitada? *
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 text-sm text-slate-800 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="frictionBroken"
+                        disabled={readOnly}
+                        checked={dayData.frictionBroken === 'yes'}
+                        onChange={() => onUpdateField(16, 'frictionBroken', 'yes')}
+                        className="text-growth-600"
+                      />
+                      Sí, la tarea ya no me intimida tanto
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-slate-800 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="frictionBroken"
+                        disabled={readOnly}
+                        checked={dayData.frictionBroken === 'no'}
+                        onChange={() => onUpdateField(16, 'frictionBroken', 'no')}
+                        className="text-amber-600"
+                      />
+                      Aún siento fricción, haré otro micro-paso
+                    </label>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* DAY 17 */}
+            {dayNumber === 17 && (
+              <div className="space-y-5">
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Formulario Anticipatorio: "Para Mañana"
+                  </span>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Tarea principal para mañana:</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={dayData.tomorrowTask || ''}
+                      onChange={(e) => onUpdateField(17, 'tomorrowTask', e.target.value)}
+                      placeholder="Ej. Rutina de ejercicios / Práctica de cálculo / Arreglar el armario"
+                      className="w-full px-4 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Primer paso exacto con el que empezarás:</label>
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={dayData.tomorrowFirstStep || ''}
+                      onChange={(e) => onUpdateField(17, 'tomorrowFirstStep', e.target.value)}
+                      placeholder="Ej. Colocar la ropa deportiva a la vista / Abrir la libreta"
+                      className="w-full px-4 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Hora tentativa de inicio:</label>
+                    <input
+                      type="time"
+                      disabled={readOnly}
+                      value={dayData.tomorrowHour || '17:00'}
+                      onChange={(e) => onUpdateField(17, 'tomorrowHour', e.target.value)}
+                      className="px-4 py-2 rounded-xl border border-slate-200 text-sm bg-white"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-3 text-sm text-slate-800 cursor-pointer pt-2">
+                    <input
+                      type="checkbox"
+                      disabled={readOnly}
+                      checked={!!dayData.checklistTomorrowReady}
+                      onChange={(e) => onUpdateField(17, 'checklistTomorrowReady', e.target.checked)}
+                      className="w-4 h-4 text-growth-600 rounded"
+                    />
+                    <span><strong>Materiales listos:</strong> Dejé las herramientas e insumos preparados sobre la mesa.</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* DAY 18 */}
+            {dayNumber === 18 && (
+              <div className="space-y-5">
+                <div className="p-3 bg-brand-50 border border-brand-200 rounded-xl text-xs text-brand-900">
+                  <strong>Secuencia Doble Guiada ({config.duration} min totales):</strong> Diseñada para resistencia de perfil {currentMagnitudeConfig.shortName}.
+                </div>
+
+                <NativeTimer
+                  sequence={config.sequence}
+                  label={`Sesión Doble Guiada (${config.duration} min)`}
+                  onComplete={(mins) => onTimerComplete(18, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+
+                <label className="flex items-center gap-3 text-sm text-slate-800 cursor-pointer p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <input
+                    type="checkbox"
+                    disabled={readOnly}
+                    checked={!!dayData.dualBlockConfirmed}
+                    onChange={(e) => onUpdateField(18, 'dualBlockConfirmed', e.target.checked)}
+                    className="w-4 h-4 text-growth-600 rounded"
+                  />
+                  <span>Confirmar conclusión de ambos bloques con su pausa intermedia respetada.</span>
+                </label>
+              </div>
+            )}
+
+            {/* DAY 19 */}
+            {dayNumber === 19 && (
+              <div className="space-y-5">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                    Checklist Integral de 5 Puntos de Autonomía:
+                  </span>
+
+                  <label className="flex items-center gap-3 text-sm text-slate-800 cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
+                    <input
+                      type="checkbox"
+                      disabled={readOnly}
+                      checked={!!dayData.check1}
+                      onChange={(e) => onUpdateField(19, 'check1', e.target.checked)}
+                      className="w-4 h-4 text-growth-600 rounded"
+                    />
+                    <span>1. Tarea definida con claridad y alcance acotado.</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 text-sm text-slate-800 cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
+                    <input
+                      type="checkbox"
+                      disabled={readOnly}
+                      checked={!!dayData.check2}
+                      onChange={(e) => onUpdateField(19, 'check2', e.target.checked)}
+                      className="w-4 h-4 text-growth-600 rounded"
+                    />
+                    <span>2. Primer paso inmediato identificado.</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 text-sm text-slate-800 cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
+                    <input
+                      type="checkbox"
+                      disabled={readOnly}
+                      checked={!!dayData.check3}
+                      onChange={(e) => onUpdateField(19, 'check3', e.target.checked)}
+                      className="w-4 h-4 text-growth-600 rounded"
+                    />
+                    <span>3. Entorno físico y digital despejado (sin distracciones).</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 text-sm text-slate-800 cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
+                    <input
+                      type="checkbox"
+                      disabled={readOnly}
+                      checked={!!dayData.check4}
+                      onChange={(e) => onUpdateField(19, 'check4', e.target.checked)}
+                      className="w-4 h-4 text-growth-600 rounded"
+                    />
+                    <span>4. Hora de inicio acordada y puntualidad respetada.</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 text-sm text-slate-800 cursor-pointer p-2 rounded-lg hover:bg-white transition-colors">
+                    <input
+                      type="checkbox"
+                      disabled={readOnly}
+                      checked={!!dayData.check5}
+                      onChange={(e) => onUpdateField(19, 'check5', e.target.checked)}
+                      className="w-4 h-4 text-growth-600 rounded"
+                    />
+                    <span>5. Temporizador activado y foco absoluto en la tarea.</span>
+                  </label>
+                </div>
+
+                <NativeTimer
+                  minutes={config.duration}
+                  label={`Sesión Integral de Autonomía (${config.duration} min - ${currentMagnitudeConfig.shortName})`}
+                  onComplete={(mins) => onTimerComplete(19, mins)}
+                  isCompleted={dayData.timerCompleted}
+                  readOnly={readOnly}
+                />
+              </div>
+            )}
+
+            {/* DAY 20 */}
+            {dayNumber === 20 && (
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    1. Selecciona tus 2 estrategias finales preferidas * ({(dayData.finalStrategies || []).length}/2)
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    {[
+                      'Micro-pasos de fricción cero',
+                      'Preparación de espacio anticipada',
+                      'Regla de mitigación de celular',
+                      'Bloques secuenciales guiados',
+                      'Principio de Premack (ocio condicionado)',
+                      'Checklist integral de autonomía'
+                    ].map(strat => {
+                      const selected = (dayData.finalStrategies || []).includes(strat);
+                      return (
+                        <label 
+                          key={strat}
+                          className={`p-3 rounded-xl border cursor-pointer flex items-center gap-2.5 transition-all ${
+                            selected 
+                              ? 'bg-growth-50 border-growth-300 text-growth-900 font-semibold' 
+                              : 'bg-white border-slate-200 text-slate-700'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            disabled={readOnly}
+                            checked={selected}
+                            onChange={(e) => {
+                              const current = dayData.finalStrategies || [];
+                              if (e.target.checked) {
+                                if (current.length < 2) {
+                                  onUpdateField(20, 'finalStrategies', [...current, strat]);
+                                }
+                              } else {
+                                onUpdateField(20, 'finalStrategies', current.filter(s => s !== strat));
+                              }
+                            }}
+                            className="rounded text-growth-600"
+                          />
+                          <span>{strat}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    2. Frecuencia semanal sostenible para este hábito *
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['3 días por semana', '4 días por semana', '5 días por semana'].map(freq => (
+                      <label 
+                        key={freq}
+                        className={`p-3 rounded-xl border text-center text-xs font-semibold cursor-pointer transition-all ${
+                          dayData.weeklyFrequency === freq
+                            ? 'bg-brand-50 border-brand-500 text-brand-900'
+                            : 'bg-white border-slate-200 text-slate-600'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="weeklyFrequency"
+                          disabled={readOnly}
+                          checked={dayData.weeklyFrequency === freq}
+                          onChange={() => onUpdateField(20, 'weeklyFrequency', freq)}
+                          className="sr-only"
+                        />
+                        {freq}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-sm">3. Plan Personal Sostenible ({currentMagnitudeConfig.shortName})</h4>
+                      <p className="text-xs text-slate-500">Crea tu síntesis definitiva adaptada a la complejidad elegida</p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={readOnly || dayData.personalPlanGenerated}
+                      onClick={() => onUpdateField(20, 'personalPlanGenerated', true)}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                        dayData.personalPlanGenerated 
+                          ? 'bg-growth-600 text-white' 
+                          : 'bg-brand-600 hover:bg-brand-700 text-white shadow-xs'
+                      }`}
+                    >
+                      {dayData.personalPlanGenerated ? '✓ Plan Generado' : 'Generar Plan Personal'}
+                    </button>
+                  </div>
+
+                  {dayData.personalPlanGenerated && (
+                    <div className="bg-white p-4 rounded-xl border border-brand-200 text-xs text-slate-800 space-y-2 animate-fadeIn">
+                      <p className="font-bold text-brand-700 uppercase tracking-wider text-[11px]">Tu Hoja de Ruta Definitiva:</p>
+                      <p>🎯 <strong>Hábito:</strong> {appState.activeHabit} ({currentMagnitudeConfig.name})</p>
+                      <p>🧩 <strong>Estrategias Elegidas:</strong> {(dayData.finalStrategies || []).join(' + ')}</p>
+                      <p>📅 <strong>Ritmo Acordado:</strong> {dayData.weeklyFrequency}</p>
+                      <p className="text-slate-500 italic mt-1">Este plan te acompañará en tu vida cotidiana para mantener el hábito vivo sin recaer.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* DAY 21 */}
+            {dayNumber === 21 && (
+              <div className="space-y-6">
+                <div className="p-4 bg-gradient-to-r from-growth-50 via-emerald-50 to-indigo-50 border border-growth-200 rounded-2xl text-center">
+                  <span className="text-3xl">🌳</span>
+                  <h4 className="font-extrabold text-slate-900 text-base mt-1">Evaluación Final y Graduación del Hábito</h4>
+                  <p className="text-xs text-slate-600">Has alcanzado el Día 21. Tu planta se convertirá en un árbol maduro de disciplina.</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    1. Nivel de transformación de tu hábito (1 a 5) *
+                  </label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map(rating => (
+                      <button
+                        key={rating}
+                        type="button"
+                        disabled={readOnly}
+                        onClick={() => onUpdateField(21, 'transformationRating', rating)}
+                        className={`text-2xl p-2 rounded-xl border transition-all ${
+                          (dayData.transformationRating || 0) >= rating
+                            ? 'bg-growth-100 border-growth-300 text-growth-600 scale-105'
+                            : 'bg-slate-50 border-slate-200 text-slate-300'
+                        }`}
+                      >
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    2. Autopercepción de tu procrastinación: ¿Antes vs Ahora? *
+                  </label>
+                  <textarea
+                    rows="3"
+                    disabled={readOnly}
+                    value={dayData.procrastinationBeforeAfter || ''}
+                    onChange={(e) => onUpdateField(21, 'procrastinationBeforeAfter', e.target.value)}
+                    placeholder="Antes aplazaba iniciar horas enteras. Ahora con lapsos calibrados rompo la inercia sin esfuerzo."
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  ></textarea>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    3. Mayor aprendizaje y conclusión de estos 21 días *
+                  </label>
+                  <textarea
+                    rows="3"
+                    disabled={readOnly}
+                    value={dayData.finalTakeaway || ''}
+                    onChange={(e) => onUpdateField(21, 'finalTakeaway', e.target.value)}
+                    placeholder="El secreto fue ajustar el lapso de tiempo a la verdadera complejidad de la tarea."
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm"
+                  ></textarea>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ACTION FOOTER: FINALIZAR DÍA BUTTON (DISABLED UNTIL 100%) */}
+          <div className="sticky bottom-2 sm:bottom-4 z-30 bg-white/95 backdrop-blur-md p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 action-bar-bottom">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 ${
+                dayPercentage === 100 ? 'bg-growth-100 text-growth-700' : 'bg-slate-100 text-slate-500'
+              }`}>
+                {dayPercentage}%
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-slate-800 truncate sm:whitespace-normal">
+                  {readOnly 
+                    ? 'Día completado y guardado con éxito' 
+                    : dayPercentage === 100 
+                      ? '¡Todas las acciones listas para guardar!' 
+                      : 'Completa todas las acciones requeridas para desbloquear'}
+                </p>
+                <p className="text-[11px] text-slate-500 truncate sm:whitespace-normal">
+                  {readOnly ? 'Solo lectura • Registros protegidos' : 'El desbloqueo del Día N+1 requiere guardar este día.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="w-full sm:w-auto flex justify-center sm:justify-end">
+              {readOnly ? (
+                <div className="flex flex-wrap sm:flex-nowrap items-center justify-center sm:justify-end gap-2 w-full sm:w-auto">
+                  <span className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-growth-100 text-growth-800 font-semibold text-xs border border-growth-200 text-center">
+                    <Icons.Check /> Día Finalizado y Protegido
+                  </span>
+                  {dayNumber < 21 && (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateDay(dayNumber + 1)}
+                      className="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs shadow-xs text-center"
+                    >
+                      Ir al Día {dayNumber + 1} ▶
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={dayPercentage < 100}
+                  onClick={() => onFinalizeDay(dayNumber)}
+                  className={`w-full sm:w-auto px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-sm text-center ${
+                    dayPercentage === 100
+                      ? 'bg-growth-500 hover:bg-growth-600 text-white hover:shadow-growth-500/30 scale-102 cursor-pointer animate-pulse'
+                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  }`}
+                >
+                  <Icons.Check /> Finalizar Día {dayNumber} (100%)
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // ==========================================
+    // VIEW 3: REPORTE DE PROGRESO Y MÉTRICAS
+    // ==========================================
+    const MetricsView = ({
+      appState,
+      currentMagnitudeConfig,
+      completedDaysCount,
+      globalPercentage,
+      plantPhase,
+      onResetAll,
+      onSelectDay,
+      onOpenConfig
+    }) => {
+      const focusMinutes = appState.metrics.focusMinutes || 0;
+      const sessionsStarted = appState.metrics.sessionsStarted || (completedDaysCount > 0 ? completedDaysCount : 0);
+      const sessionsCompleted = appState.metrics.sessionsCompleted || completedDaysCount;
+      const tasksRegistered = appState.metrics.tasksRegisteredCount || (completedDaysCount >= 1 ? 1 : 0);
+      const stepsCompleted = appState.metrics.stepsCompletedCount || (completedDaysCount >= 2 ? 3 : 0);
+
+      const punctualityLogs = appState.metrics.punctualityLogs || [];
+      const onTimeCount = punctualityLogs.filter(l => l.isOnTime).length;
+      const punctualityPercentage = punctualityLogs.length > 0 
+        ? Math.round((onTimeCount / punctualityLogs.length) * 100) 
+        : (completedDaysCount >= 8 ? 100 : 0);
+
+      const handleExportJSON = () => {
+        const report = {
+          program: 'HabitFlow 21 Días',
+          habit: appState.activeHabit,
+          magnitude: currentMagnitudeConfig,
+          exportedAt: new Date().toISOString(),
+          summary: {
+            completedDays: completedDaysCount,
+            globalPercentage: `${globalPercentage}%`,
+            focusMinutes,
+            sessionsCompleted,
+            plantPhase: plantPhase.name,
+            punctualityPercentage: `${punctualityPercentage}%`
+          },
+          daysHistory: appState.dayData,
+          personalPlan: appState.personalPlan
+        };
+
+        const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `habitflow-reporte-21dias-${appState.habitMagnitude}-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      return (
+        <div className="space-y-8 max-w-5xl mx-auto pb-16">
+          {/* HEADER */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-growth-100 text-growth-800 text-xs font-semibold">
+                  <Icons.BarChart /> Métricas del Sistema
+                </span>
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${currentMagnitudeConfig.badgeBg}`}>
+                  {currentMagnitudeConfig.icon} {currentMagnitudeConfig.name}
+                </span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900">
+                Reporte de Progreso y Métricas Objetivas
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                Monitoreo de tiempos cronometrados y constancia acumulada para: <strong className="text-slate-700">{appState.activeHabit}</strong>.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
+              <button
+                type="button"
+                onClick={onOpenConfig}
+                className="flex-1 sm:flex-none justify-center px-3.5 sm:px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center gap-1.5 shadow-2xs text-center"
+              >
+                <Icons.Settings /> Cambiar Magnitud
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportJSON}
+                className="flex-1 sm:flex-none justify-center px-3.5 sm:px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center gap-1.5 shadow-2xs text-center"
+              >
+                <Icons.Download /> Exportar JSON
+              </button>
+
+              <button
+                type="button"
+                onClick={onResetAll}
+                className="w-full sm:w-auto justify-center px-3.5 sm:px-4 py-2.5 rounded-xl border border-rose-200 text-rose-700 hover:bg-rose-50 font-semibold text-xs flex items-center gap-1.5 text-center"
+              >
+                <Icons.Refresh /> Reiniciar Ciclo
+              </button>
+            </div>
+          </div>
+
+          {/* OBJECTIVE METRICS 5-CARD GRID */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-400 mb-2">
+                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Actividades</span>
+                <Icons.Target />
+              </div>
+              <p className="text-2xl sm:text-3xl font-black text-slate-900">
+                {completedDaysCount} <span className="text-sm font-normal text-slate-400">/ 21</span>
+              </p>
+              <div className="mt-2 text-xs font-semibold text-growth-600">
+                {globalPercentage}% del programa
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-400 mb-2">
+                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Tiempo de Enfoque</span>
+                <Icons.Clock />
+              </div>
+              <p className="text-2xl sm:text-3xl font-black text-brand-600">
+                {focusMinutes} <span className="text-sm font-normal text-slate-400">min</span>
+              </p>
+              <div className="mt-2 text-xs text-slate-500 font-medium">
+                De {currentMagnitudeConfig.totalPlannedMinutes} min planeados ({currentMagnitudeConfig.shortName})
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-400 mb-2">
+                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Sesiones</span>
+                <Icons.Sparkles />
+              </div>
+              <p className="text-2xl sm:text-3xl font-black text-slate-900">
+                {sessionsCompleted} <span className="text-sm font-normal text-slate-400">/ {sessionsStarted}</span>
+              </p>
+              <div className="mt-2 text-xs text-slate-500">
+                Tasa de término: {sessionsStarted > 0 ? Math.round((sessionsCompleted / sessionsStarted) * 100) : 0}%
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-400 mb-2">
+                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Desglose</span>
+                <Icons.Award />
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-slate-900">
+                {tasksRegistered} <span className="text-xs text-slate-400 font-medium">tar.</span> • {stepsCompleted} <span className="text-xs text-slate-400 font-medium">pasos</span>
+              </p>
+              <div className="mt-2 text-xs text-slate-500">
+                Micro-acciones ejecutadas
+              </div>
+            </div>
+
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-2xs">
+              <div className="flex items-center justify-between text-slate-400 mb-2">
+                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Puntualidad</span>
+                <Icons.Calendar />
+              </div>
+              <p className="text-2xl sm:text-3xl font-black text-growth-600">
+                {punctualityPercentage}%
+              </p>
+              <div className="mt-2 text-xs text-slate-500">
+                Margen tolerado: 15 min
+              </div>
+            </div>
+          </div>
+
+          {/* MANDATORY VERIFICATION NOTE REQUIRED BY SPEC */}
+          <div className="bg-slate-100/80 rounded-2xl p-4 sm:p-5 border border-slate-200/80 flex items-start gap-3 text-slate-700">
+            <span className="text-lg text-brand-600 mt-0.5">ℹ️</span>
+            <p className="text-xs sm:text-sm leading-relaxed italic">
+              <strong>Nota aclaratoria del sistema:</strong> "La aplicación mide acciones verificables dentro del sistema (registros guardados, temporizadores finalizados y marcas de tiempo), reportando sesiones registradas y actividades confirmadas."
+            </p>
+          </div>
+
+          {/* MAGNITUDE COMPARISON CARD */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-bold text-slate-900 text-base">Comparativa de los 3 Calendarios Calibrados</h4>
+                <p className="text-xs text-slate-500">La aplicación adapta dinámicamente los 21 días según la naturaleza de la tarea</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {Object.values(HABIT_MAGNITUDES).map((mag) => {
+                const isActive = appState.habitMagnitude === mag.id;
+                return (
+                  <div
+                    key={mag.id}
+                    className={`p-4 rounded-2xl border transition-all ${
+                      isActive 
+                        ? 'border-brand-500 bg-brand-50/30 ring-2 ring-brand-500/20' 
+                        : 'border-slate-200 bg-slate-50/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xl">{mag.icon}</span>
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${mag.badgeBg}`}>
+                        {mag.timeRangeLabel}
+                      </span>
+                    </div>
+                    <h5 className="font-bold text-slate-800 text-sm">{mag.name}</h5>
+                    <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                      {mag.description}
+                    </p>
+                    <div className="mt-3 pt-2 border-t border-slate-200/80 text-[11px] text-slate-500">
+                      Total 21 días: <strong className="text-slate-800">{mag.totalPlannedMinutes} minutos</strong> de trabajo acumulable.
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* AUDIT LOG: TABLE OF COMPLETED DAYS */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Historial Detallado de Actividades Registradas</h3>
+                <p className="text-xs text-slate-500">Auditoría completa bajo el calendario: {currentMagnitudeConfig.name}</p>
+              </div>
+              <span className="text-xs font-semibold text-slate-400">
+                {completedDaysCount} registros activos
+              </span>
+            </div>
+
+            <div className="overflow-x-auto table-responsive">
+              <table className="w-full text-left text-xs text-slate-600 min-w-[620px]">
+                <thead className="bg-slate-50 text-slate-700 font-bold uppercase text-[11px] border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">Día</th>
+                    <th className="py-3 px-4">Título de la Actividad</th>
+                    <th className="py-3 px-4">Etapa</th>
+                    <th className="py-3 px-4">Tiempo Calibrado</th>
+                    <th className="py-3 px-4">Estado del Día</th>
+                    <th className="py-3 px-4 text-right">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21].map(dNum => {
+                    const item = getDayConfig(dNum, appState.habitMagnitude);
+                    const done = appState.completedDays.includes(item.day);
+                    const isNext = item.day === Math.min(21, (Math.max(0, ...appState.completedDays) + 1));
+
+                    return (
+                      <tr key={item.day} className={`hover:bg-slate-50/70 transition-colors ${done ? 'bg-growth-50/20' : ''}`}>
+                        <td className="py-3 px-4 font-bold text-slate-900">
+                          Día {item.day}
+                        </td>
+                        <td className="py-3 px-4 font-medium text-slate-800">
+                          {item.title}
+                        </td>
+                        <td className="py-3 px-4 text-slate-500">
+                          Etapa {item.stage}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-700">
+                          {item.duration} min
+                        </td>
+                        <td className="py-3 px-4">
+                          {done ? (
+                            <span className="inline-flex items-center gap-1 font-semibold text-growth-700 bg-growth-100 px-2 py-0.5 rounded-full border border-growth-200">
+                              <Icons.Check /> Completado (100%)
+                            </span>
+                          ) : isNext ? (
+                            <span className="inline-flex items-center gap-1 font-semibold text-brand-700 bg-brand-100 px-2 py-0.5 rounded-full">
+                              ⚡ En Curso
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                              <Icons.Lock /> Bloqueado
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => onSelectDay(item.day)}
+                            className="font-semibold text-brand-600 hover:text-brand-800 hover:underline"
+                          >
+                            {done ? 'Consultar' : isNext ? 'Comenzar' : 'Ver'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const rootElement = document.getElementById('root');
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(<HabitFlowApp />);
+  </script>
+</body>
+</html>
